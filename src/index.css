@@ -1,0 +1,28 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&family=Noto+Serif+SC:wght@400;600;700;900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-serif: "Noto Serif SC", "SimSun", "STSong", serif;
+  --font-mono: "JetBrains Mono", ui-monospace, sans-serif;
+}
+
+/* Custom Scrollbars */
+.no-scrollbar::-webkit-scrollbar {
+  display: none; /* Safari and Chrome */
+}
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+body {
+  background-color: #f1f8f5; /* Premium soft herbal green background */
+  color: #2e4a3f;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+
+/* Custom smooth input styling */
+input::placeholder {
+  color: #a3bfae;
+}

@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>灵枢·五觉养生阁 — Prompt 架构分析</title>
+<style>
+  /* ===== Claude Design System Tokens ===== */
+  :root {
+    --color-primary: #cc785c;
+    --color-primary-active: #a9583e;
+    --color-ink: #141413;
+    --color-body: #3d3d3a;
+    --color-body-strong: #252523;
+    --color-muted: #6c6a64;
+    --color-muted-soft: #8e8b82;
+    --color-hairline: #e6dfd8;
+    --color-hairline-soft: #ebe6df;
+    --color-canvas: #faf9f5;
+    --color-surface-soft: #f5f0e8;
+    --color-surface-card: #efe9de;
+    --color-surface-dark: #181715;
+    --color-surface-dark-elevated: #252320;
+    --color-surface-dark-soft: #1f1e1b;
+    --color-on-primary: #ffffff;
+    --color-on-dark: #faf9f5;
+    --color-on-dark-soft: #a09d96;
+    --color-accent-teal: #5db8a6;
+    --color-accent-amber: #e8a55a;
+    --color-success: #5db872;
+    --color-error: #c64545;
+
+    --font-display: "Cormorant Garamond", "EB Garamond", "Tiempos Headline", Garamond, "Times New Roman", serif;
+    --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-code: "JetBrains Mono", ui-monospace, "Fira Code", monospace;
+
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+    --radius-pill: 9999px;
+  }
+
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  /* ===== Reset & Base ===== */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html {
+    font-size: 18px;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    font-family: var(--font-body);
+    background: var(--color-canvas);
+    color: var(--color-ink);
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ===== Layout ===== */
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 32px;
+  }
+
+  section {
+    padding: 96px 0;
+  }
+
+  /* ===== Typography (larger per user request) ===== */
+  h1 {
+    font-family: var(--font-display);
+    font-size: 3.2rem;
+    font-weight: 400;
+    line-height: 1.1;
+    letter-spacing: -1.5px;
+    color: var(--color-ink);
+  }
+
+  h2 {
+    font-family: var(--font-display);
+    font-size: 2.4rem;
+    font-weight: 400;
+    line-height: 1.15;
+    letter-spacing: -0.8px;
+    color: var(--color-ink);
+    margin-bottom: 16px;
+  }
+
+  h3 {
+    font-family: var(--font-display);
+    font-size: 1.6rem;
+    font-weight: 500;
+    line-height: 1.2;
+    letter-spacing: -0.3px;
+    color: var(--color-ink);
+    margin-bottom: 12px;
+  }
+
+  h4 {
+    font-family: var(--font-body);
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: var(--color-body-strong);
+    margin-bottom: 8px;
+  }
+
+  p, li {
+    font-size: 1.05rem;
+    color: var(--color-body);
+    line-height: 1.7;
+  }
+
+  .subtitle {
+    font-size: 1.25rem;
+    color: var(--color-muted);
+    max-width: 680px;
+    margin-top: 16px;
+    line-height: 1.6;
+  }
+
+  .label-uppercase {
+    font-family: var(--font-body);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--color-muted);
+  }
+
+  /* ===== Hero ===== */
+  .hero {
+    padding: 120px 0 80px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .hero h1 { max-width: 800px; }
+  .hero .subtitle { text-align: center; margin: 20px auto 0; }
+
+  .hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--color-surface-card);
+    color: var(--color-primary);
+    font-family: var(--font-body);
+    font-size: 0.82rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    padding: 6px 18px;
+    border-radius: var(--radius-pill);
+    margin-bottom: 28px;
+  }
+
+  /* ===== Architecture Diagram ===== */
+  .arch-diagram {
+    background: var(--color-surface-dark);
+    color: var(--color-on-dark);
+    border-radius: var(--radius-xl);
+    padding: 48px;
+    margin: 48px 0;
+    overflow-x: auto;
+  }
+  .arch-diagram h3 {
+    color: var(--color-on-dark);
+    text-align: center;
+    margin-bottom: 32px;
+    font-size: 1.4rem;
+  }
+  .arch-flow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    font-family: var(--font-body);
+    font-size: 0.95rem;
+  }
+  .arch-node {
+    background: var(--color-surface-dark-elevated);
+    border: 1px solid rgba(250,249,245,0.1);
+    border-radius: var(--radius-lg);
+    padding: 16px 24px;
+    text-align: center;
+    min-width: 140px;
+  }
+  .arch-node.highlight {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 24px rgba(204,120,92,0.2);
+  }
+  .arch-node .node-label {
+    font-size: 0.75rem;
+    color: var(--color-on-dark-soft);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 6px;
+  }
+  .arch-node .node-value {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--color-on-dark);
+  }
+  .arch-arrow {
+    color: var(--color-primary);
+    font-size: 1.5rem;
+    flex-shrink: 0;
+  }
+
+  /* ===== Base Prompt Section ===== */
+  .prompt-block {
+    background: var(--color-surface-dark);
+    color: var(--color-on-dark);
+    border-radius: var(--radius-lg);
+    padding: 32px;
+    margin: 24px 0;
+    font-family: var(--font-code);
+    font-size: 0.88rem;
+    line-height: 1.8;
+    overflow-x: auto;
+    position: relative;
+  }
+  .prompt-block .prompt-label {
+    position: absolute;
+    top: 12px;
+    right: 16px;
+    font-family: var(--font-body);
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--color-on-dark-soft);
+    background: var(--color-surface-dark-elevated);
+    padding: 3px 10px;
+    border-radius: var(--radius-pill);
+  }
+  .prompt-block .hl-persona { color: #e8a55a; }
+  .prompt-block .hl-rule { color: #5db8a6; }
+  .prompt-block .hl-disclaimer { color: #c64545; }
+  .prompt-block .hl-focus { color: #cc785c; }
+
+  /* ===== Module Cards ===== */
+  .module-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    gap: 24px;
+    margin: 32px 0;
+  }
+
+  .module-card {
+    background: var(--color-surface-card);
+    border-radius: var(--radius-lg);
+    padding: 32px;
+    border-left: 4px solid transparent;
+    transition: transform 0.2s;
+  }
+  .module-card:hover {
+    transform: translateY(-2px);
+  }
+
+  .module-card.diet    { border-left-color: #d97706; }
+  .module-card.exercise { border-left-color: #2563eb; }
+  .module-card.mental  { border-left-color: #db2777; }
+  .module-card.wellness { border-left-color: #059669; }
+  .module-card.surprise { border-left-color: #9333ea; }
+
+  .module-card .card-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .module-card .card-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    flex-shrink: 0;
+  }
+  .module-card.diet .card-icon    { background: #fef3c7; }
+  .module-card.exercise .card-icon { background: #dbeafe; }
+  .module-card.mental .card-icon  { background: #fce7f3; }
+  .module-card.wellness .card-icon { background: #d1fae5; }
+  .module-card.surprise .card-icon { background: #ede9fe; }
+
+  .module-card .card-title {
+    font-family: var(--font-display);
+    font-size: 1.35rem;
+    font-weight: 500;
+    color: var(--color-ink);
+  }
+  .module-card .card-subtitle {
+    font-size: 0.82rem;
+    color: var(--color-muted);
+  }
+
+  .module-card .prompt-content {
+    background: var(--color-surface-dark);
+    color: var(--color-on-dark);
+    border-radius: var(--radius-md);
+    padding: 20px;
+    font-family: var(--font-code);
+    font-size: 0.82rem;
+    line-height: 1.75;
+    margin-bottom: 16px;
+  }
+
+  .module-card .focus-list {
+    list-style: none;
+    padding: 0;
+  }
+  .module-card .focus-list li {
+    position: relative;
+    padding-left: 20px;
+    margin-bottom: 8px;
+    font-size: 0.95rem;
+    color: var(--color-body);
+  }
+  .module-card .focus-list li::before {
+    content: "◆";
+    position: absolute;
+    left: 0;
+    font-size: 0.6rem;
+    top: 6px;
+  }
+  .module-card.diet .focus-list li::before    { color: #d97706; }
+  .module-card.exercise .focus-list li::before { color: #2563eb; }
+  .module-card.mental .focus-list li::before  { color: #db2777; }
+  .module-card.wellness .focus-list li::before { color: #059669; }
+  .module-card.surprise .focus-list li::before { color: #9333ea; }
+
+  /* ===== Inspiration Grid ===== */
+  .inspiration-section {
+    background: var(--color-surface-soft);
+    border-radius: var(--radius-xl);
+    padding: 48px;
+    margin: 32px 0;
+  }
+
+  .inspiration-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+    margin-top: 24px;
+  }
+
+  .inspiration-card {
+    background: var(--color-canvas);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    cursor: default;
+    transition: border-color 0.2s;
+  }
+  .inspiration-card:hover {
+    border-color: var(--color-primary);
+  }
+  .inspiration-card .insp-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    padding: 3px 10px;
+    border-radius: var(--radius-pill);
+    margin-bottom: 10px;
+  }
+  .inspiration-card .insp-text {
+    font-size: 0.92rem;
+    color: var(--color-body-strong);
+    line-height: 1.6;
+    font-weight: 500;
+  }
+
+  .tag-diet    { background: #fef3c7; color: #92400e; }
+  .tag-exercise { background: #dbeafe; color: #1e40af; }
+  .tag-mental  { background: #fce7f3; color: #9d174d; }
+  .tag-wellness { background: #d1fae5; color: #065f46; }
+  .tag-surprise { background: #ede9fe; color: #5b21b6; }
+
+  /* ===== Welcome Messages ===== */
+  .welcome-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    gap: 24px;
+    margin: 32px 0;
+  }
+
+  .welcome-card {
+    background: var(--color-surface-card);
+    border-radius: var(--radius-lg);
+    padding: 28px;
+  }
+  .welcome-card .wc-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .welcome-card .wc-emoji {
+    font-size: 1.6rem;
+  }
+  .welcome-card .wc-label {
+    font-family: var(--font-display);
+    font-size: 1.2rem;
+    font-weight: 500;
+  }
+  .welcome-card .wc-text {
+    font-size: 0.92rem;
+    color: var(--color-body);
+    line-height: 1.7;
+    margin-bottom: 12px;
+    padding: 14px;
+    background: var(--color-canvas);
+    border-radius: var(--radius-md);
+    border-left: 3px solid var(--color-hairline);
+  }
+  .welcome-card .wc-accessible {
+    font-size: 0.82rem;
+    color: var(--color-muted);
+    padding: 12px;
+    background: var(--color-surface-soft);
+    border-radius: var(--radius-md);
+    line-height: 1.6;
+  }
+  .welcome-card .wc-accessible::before {
+    content: "无障碍版本 → ";
+    font-weight: 600;
+    color: var(--color-primary);
+  }
+
+  /* ===== Divider ===== */
+  .section-divider {
+    width: 60px;
+    height: 3px;
+    background: var(--color-primary);
+    border-radius: 2px;
+    margin: 0 0 32px 0;
+  }
+  .section-divider.center {
+    margin: 0 auto 32px;
+  }
+
+  /* ===== Summary Table ===== */
+  .summary-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 24px 0;
+    font-size: 0.95rem;
+  }
+  .summary-table th {
+    font-family: var(--font-body);
+    font-weight: 600;
+    font-size: 0.78rem;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--color-muted);
+    text-align: left;
+    padding: 12px 16px;
+    border-bottom: 2px solid var(--color-hairline);
+  }
+  .summary-table td {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--color-hairline-soft);
+    vertical-align: top;
+  }
+  .summary-table tr:last-child td {
+    border-bottom: none;
+  }
+  .summary-table .mono {
+    font-family: var(--font-code);
+    font-size: 0.82rem;
+    color: var(--color-primary);
+    background: var(--color-surface-soft);
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+
+  /* ===== Footer ===== */
+  .page-footer {
+    background: var(--color-surface-dark);
+    color: var(--color-on-dark-soft);
+    text-align: center;
+    padding: 48px 32px;
+    font-size: 0.88rem;
+  }
+  .page-footer a {
+    color: var(--color-primary);
+    text-decoration: none;
+  }
+
+  /* ===== Responsive ===== */
+  @media (max-width: 768px) {
+    html { font-size: 16px; }
+    h1 { font-size: 2.2rem; }
+    h2 { font-size: 1.8rem; }
+    section { padding: 64px 0; }
+    .container { padding: 0 20px; }
+    .arch-diagram { padding: 28px; }
+    .arch-flow { flex-direction: column; }
+    .arch-arrow { transform: rotate(90deg); }
+    .module-grid { grid-template-columns: 1fr; }
+    .inspiration-section { padding: 28px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ===================== HERO ===================== -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-badge">✦ Prompt Architecture Analysis</div>
+    <h1>灵枢·五觉养生阁<br>Prompt 设计解析</h1>
+    <p class="subtitle">一份多 Agent 前端页面的提示词架构全景分析 —— 从基础人设到五大模块的条件切换、快捷灵感与欢迎语体系</p>
+  </div>
+</section>
+
+<!-- ===================== ARCHITECTURE ===================== -->
+<section>
+  <div class="container">
+    <span class="label-uppercase">Architecture Overview</span>
+    <h2>单端点多 Agent 架构</h2>
+    <div class="section-divider"></div>
+    <p style="max-width:720px; margin-bottom: 12px;">
+      本项目采用<strong>单一 Gemini API 端点 + 条件 Prompt 切换</strong>的模式实现多 Agent 效果。
+      前端通过 <code>activeModule</code> 状态变量告知后端当前激活的模块，后端在同一 <code>/api/chat</code> 接口中拼接不同的模块焦点指令，实现"一个端点、五种人格"。
+    </p>
+
+    <div class="arch-diagram">
+      <h3>请求数据流</h3>
+      <div class="arch-flow">
+        <div class="arch-node">
+          <div class="node-label">Frontend</div>
+          <div class="node-value">React 19 + TS</div>
+        </div>
+        <div class="arch-arrow">→</div>
+        <div class="arch-node">
+          <div class="node-label">State</div>
+          <div class="node-value">activeModule</div>
+        </div>
+        <div class="arch-arrow">→</div>
+        <div class="arch-node highlight">
+          <div class="node-label">Endpoint</div>
+          <div class="node-value">POST /api/chat</div>
+        </div>
+        <div class="arch-arrow">→</div>
+        <div class="arch-node">
+          <div class="node-label">Switch</div>
+          <div class="node-value">if-else 拼接</div>
+        </div>
+        <div class="arch-arrow">→</div>
+        <div class="arch-node">
+          <div class="node-label">Model</div>
+          <div class="node-value">gemini-3.5-flash</div>
+        </div>
+      </div>
+    </div>
+
+    <h3>核心参数</h3>
+    <table class="summary-table">
+      <thead>
+        <tr><th>参数</th><th>值</th><th>说明</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>模型</td><td><span class="mono">gemini-3.5-flash</span></td><td>Google Gemini 轻量快速模型</td></tr>
+        <tr><td>Temperature</td><td><span class="mono">0.75</span></td><td>中等创造性，适合养生建议场景</td></tr>
+        <tr><td>SDK</td><td><span class="mono">@google/genai</span></td><td>Google 官方 GenAI SDK</td></tr>
+        <tr><td>模块数</td><td><span class="mono">5 + 1 fallback</span></td><td>diet / exercise / mental / wellness / surprise + 全息</td></tr>
+        <tr><td>语言约束</td><td><span class="mono">100% 中文</span></td><td>强制全中文输出，专有名词白话解释</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ===================== BASE PROMPT ===================== -->
+<section style="background: var(--color-surface-soft);">
+  <div class="container">
+    <span class="label-uppercase">Base System Prompt</span>
+    <h2>基础人设指令</h2>
+    <div class="section-divider"></div>
+    <p style="max-width:720px; margin-bottom: 24px;">
+      所有模块共享同一基础系统指令，定义了 AI 的核心人格、语言规则、回答格式和医学免责声明。
+      模块焦点指令被嵌入到基础指令的中间位置，形成 <strong>"人设 → 焦点 → 规则 → 免责"</strong> 的四段式结构。
+    </p>
+
+    <div class="prompt-block">
+      <span class="prompt-label">server.ts : 83-92</span>
+      <span class="hl-persona">你是一位极具亲和力、温润儒雅的中医养生保健专家和生活调理顾问，名为"灵枢五觉阁主大医"。</span><br>
+      <span class="hl-persona">你的目标是基于极具品质感的"灵枢·五觉养生阁"服务用户，帮助追求品质健康生活的人们调理身体，养成良好的慢节奏律动。</span><br><br>
+      <span class="hl-focus">【此处插入 moduleFocusInstruction — 由 activeModule 决定】</span><br><br>
+      <span class="hl-rule">【语言要求】：你必须百分之百使用中文简体与用户交谈，绝对不要输出任何英文句子、英文段落或英文词汇。如果是中药、食材或病症等专有名词，一律转换为中文并进行白话解释。</span><br><br>
+      <span class="hl-rule">回答规范与语气：<br>
+      1. 语气温和、令人安心，使用关怀、尊重的东方雅致语言。多用"施主"、"您可以尝试"、"妙哉/善哉"等温暖厚道字眼。<br>
+      2. 排版高度清晰圆满：多用短句、醒目的符号、列表和加粗。禁止连续大片不换行的文字泥潭。<br>
+      3. 如果用户上传了图片（食物、舌苔等），扮演专业而谦逊的参谋，从"温和养生辩证"角度点评。<br></span>
+      <span class="hl-disclaimer">4. 结尾必须附带精简温馨的养生叮咛与医学免责："灵枢五觉阁祝您身心泰然。以上妙法经验均作日常保泰颐情之参考，若确有疾，请务必前往正规医院请大夫调理挂号诊断哦。"</span>
+    </div>
+
+    <h3 style="margin-top: 32px;">Prompt 结构拆解</h3>
+    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px,1fr)); gap:16px; margin-top:16px;">
+      <div style="background:var(--color-canvas); padding:20px; border-radius:var(--radius-lg); border-left:4px solid #e8a55a;">
+        <h4 style="color:#e8a55a;">① 人设层</h4>
+        <p style="font-size:0.9rem;">定义角色名"灵枢五觉阁主大医"，气质"温润儒雅"，服务目标"品质健康生活"</p>
+      </div>
+      <div style="background:var(--color-canvas); padding:20px; border-radius:var(--radius-lg); border-left:4px solid var(--color-primary);">
+        <h4 style="color:var(--color-primary);">② 焦点层</h4>
+        <p style="font-size:0.9rem;">条件注入的模块专属指令，决定当前会话的专业领域和回答方向</p>
+      </div>
+      <div style="background:var(--color-canvas); padding:20px; border-radius:var(--radius-lg); border-left:4px solid #5db8a6;">
+        <h4 style="color:#5db8a6;">③ 规则层</h4>
+        <p style="font-size:0.9rem;">语言约束（100%中文）、语气规范（施主/善哉）、排版要求（短句+列表）、图片处理</p>
+      </div>
+      <div style="background:var(--color-canvas); padding:20px; border-radius:var(--radius-lg); border-left:4px solid var(--color-error);">
+        <h4 style="color:var(--color-error);">④ 免责层</h4>
+        <p style="font-size:0.9rem;">强制结尾附带医学免责声明，引导用户就医</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== MODULE PROMPTS ===================== -->
+<section>
+  <div class="container">
+    <span class="label-uppercase">Module-Specific Prompts</span>
+    <h2>五大模块焦点指令</h2>
+    <div class="section-divider"></div>
+    <p style="max-width:720px; margin-bottom: 32px;">
+      每个模块通过 <code>if / else if</code> 条件注入不同的 <code>moduleFocusInstruction</code>，
+      定义该模块的<strong>专业身份</strong>、<strong>关注领域</strong>和<strong>回答策略</strong>。
+    </p>
+
+    <div class="module-grid">
+      <!-- Diet -->
+      <div class="module-card diet">
+        <div class="card-header">
+          <div class="card-icon">🍱</div>
+          <div>
+            <div class="card-title">饮食模块</div>
+            <div class="card-subtitle">应季食疗 · 膳方养人</div>
+          </div>
+        </div>
+        <div class="prompt-content">
+          <span class="hl-focus">【当前会话焦点：饮食模块（应季食疗 · 膳方养人）】</span><br>
+          作为中医膳食调理专家，你擅长结合四时节气、体质五行提供"应季食疗方案"。<br>
+          重点关注：如何利用日常食料、草药配制药膳与汤饮。若用户传来食物摄入物或舌苔等图片，提供精细点评。推荐清润、节气调养、调理脾胃食方。
+        </div>
+        <h4>设计要点</h4>
+        <ul class="focus-list">
+          <li>角色定位：中医膳食调理专家</li>
+          <li>核心能力：四时节气 × 体质五行 → 食疗方案</li>
+          <li>多模态：支持食物照片和舌苔图片分析</li>
+          <li>输出方向：药膳、汤饮、节气调养食方</li>
+        </ul>
+      </div>
+
+      <!-- Exercise -->
+      <div class="module-card exercise">
+        <div class="card-header">
+          <div class="card-icon">🏃</div>
+          <div>
+            <div class="card-title">运动模块</div>
+            <div class="card-subtitle">导引术 · 活络气血</div>
+          </div>
+        </div>
+        <div class="prompt-content">
+          <span class="hl-focus">【当前会话焦点：运动模块（导引术 · 活络气血）】</span><br>
+          作为东方传统导引教练，你致力于分享易学好用的呼吸徐徐微运动功法。<br>
+          重点关注：指导久坐白领肩颈僵硬、腰肌劳损放松动作。重点推荐八段锦（如调理脾胃须单举）、五禽戏。细致教授穴位拉伸。
+        </div>
+        <h4>设计要点</h4>
+        <ul class="focus-list">
+          <li>角色定位：东方传统导引教练</li>
+          <li>目标人群：久坐白领（肩颈/腰肌问题）</li>
+          <li>核心功法：八段锦、五禽戏、穴位拉伸</li>
+          <li>实用导向：微运动、即效动作</li>
+        </ul>
+      </div>
+
+      <!-- Mental -->
+      <div class="module-card mental">
+        <div class="card-header">
+          <div class="card-icon">🧠</div>
+          <div>
+            <div class="card-title">心理模块</div>
+            <div class="card-subtitle">安心宁神 · 情志平衡</div>
+          </div>
+        </div>
+        <div class="prompt-content">
+          <span class="hl-focus">【当前会话焦点：心理模块（安心宁神 · 情志平衡）】</span><br>
+          作为中医情志调护与心理开解大师，你的文字字字如春风化雨，治愈，祥和。<br>
+          重点关注：如何平和面对职场重压、睡眠障碍与内心焦虑。推荐轻重缓急按抚穴位（太冲、内关、神门）、安神泡茶、意念调息静坐法门。
+        </div>
+        <h4>设计要点</h4>
+        <ul class="focus-list">
+          <li>角色定位：中医情志调护与心理开解大师</li>
+          <li>语气要求："字字如春风化雨"——最强语气约束</li>
+          <li>场景覆盖：职场压力、失眠、焦虑</li>
+          <li>方案组合：穴位 + 药茶 + 静坐法门</li>
+        </ul>
+      </div>
+
+      <!-- Wellness -->
+      <div class="module-card wellness">
+        <div class="card-header">
+          <div class="card-icon">🍃</div>
+          <div>
+            <div class="card-title">养生模块</div>
+            <div class="card-subtitle">经络节气 · 天人合一</div>
+          </div>
+        </div>
+        <div class="prompt-content">
+          <span class="hl-focus">【当前会话焦点：养生模块（经络节气 · 天人合一）】</span><br>
+          作为子午流注十二时辰与节气养生专家，掌握大自然与人体律动的奥秘。<br>
+          重点关注：今日时辰、本季经脉荣衰。重点详备解释如何通过温按或指揉（如足三里、涌泉、合谷等）精确位置进行养气培本。
+        </div>
+        <h4>设计要点</h4>
+        <ul class="focus-list">
+          <li>角色定位：子午流注与节气养生专家</li>
+          <li>理论深度：十二时辰 × 经脉荣衰</li>
+          <li>实操导向：精确穴位定位 + 手法指导</li>
+          <li>核心穴位：足三里、涌泉、合谷等</li>
+        </ul>
+      </div>
+
+      <!-- Surprise -->
+      <div class="module-card surprise">
+        <div class="card-header">
+          <div class="card-icon">🎁</div>
+          <div>
+            <div class="card-title">惊喜模块</div>
+            <div class="card-subtitle">随机彩蛋 · 灵机妙用</div>
+          </div>
+        </div>
+        <div class="prompt-content">
+          <span class="hl-focus">【当前会话焦点：惊喜模块（随机彩蛋 · 灵机妙用）】</span><br>
+          作为灵动机敏的'东方随缘法门推荐官'，为沉闷乏味的生活带来源源不断的传统巧思与诗意微光。<br>
+          重点关注：提供古雅幽默的"养生签"（今日宜温灸、忌妄劳）、解说本草纲目、孙思邈神医遗风，或随机创作古诗词顺口溜。
+        </div>
+        <h4>设计要点</h4>
+        <ul class="focus-list">
+          <li>角色定位：东方随缘法门推荐官</li>
+          <li>风格差异：古雅幽默，与其他四模块形成反差</li>
+          <li>内容类型：养生签、名医故事、古诗顺口溜</li>
+          <li>设计意图：趣味留存，打破养生的严肃感</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== QUICK INSPIRATIONS ===================== -->
+<section style="background: var(--color-surface-soft);">
+  <div class="container">
+    <span class="label-uppercase">Quick Inspirations</span>
+    <h2>20 条快捷灵感提示词</h2>
+    <div class="section-divider"></div>
+    <p style="max-width:720px; margin-bottom: 8px;">
+      每个模块配置 4 条预设提示词，降低用户输入门槛。这些提示词是精心设计的 <strong>"种子 prompt"</strong>，
+      既展示该模块的能力边界，又引导用户进入高质量的对话路径。
+    </p>
+
+    <div class="inspiration-section">
+      <!-- Diet -->
+      <h3 style="margin-bottom:4px;">🍱 应季食疗</h3>
+      <div class="inspiration-grid">
+        <div class="inspiration-card">
+          <div class="insp-tag tag-diet">祛湿养心</div>
+          <div class="insp-text">立夏梅雨节气，吃什么食材最能祛湿养心、调和脾胃？</div>
+        </div>
+        <div class="inspiration-card">
+          <div class="insp-tag tag-diet">白领药茶</div>
+          <div class="insp-text">推荐一款适合办公室白领，下午三点办公泡饮的"参芪亮睛茶"配方。</div>
+        </div>
+        <div class="inspiration-card">
+          <div class="insp-tag tag-diet">温健脾胃</div>
+          <div class="insp-text">我脾胃虚弱、容易胃胀，怎么利用日常山药与生姜进行温补膳食？</div>
+        </div>
+        <div class="inspiration-card">
+          <div class="insp-tag tag-diet">消食解积</div>
+          <div class="insp-text">晚饭总是吃太多积食难消，有没有消食化积的中医小汤方推荐？</div>
+        </div>
+      </div>
+
+      <!-- Exercise -->
+      <h3 style="margin-top:32px; margin-bottom:4px;">🏃 气血导引</h3>
+      <div class="inspiration-grid">
+        <div class="inspiration-card">
+          <div class="insp-tag tag-exercise">肩颈放松</div>
+          <div class="insp-text">久坐一整天不仅肩膀僵硬，颈椎也酸痛。有推荐哪个十秒钟即效的拉穴小动作？</div>
+        </div>
+        <div class="inspiration-card">
+          <div class="insp-tag tag-exercise">调脾胃神功</div>
+          <div class="insp-text">常听八段锦有调和脏腑大功用。我脾胃不好，该专练里面的哪一式？动作要诀是什么？</div>
+        </div>
+        <div class="inspiration-card">
+          <div class="insp-tag tag-exercise">明目熨眼</div>
+          <div class="insp-text">眼睛看久了电脑干涩流泪，怎么按压眼周经络、摩擦生热来进行熨眼调理？</div>
+        </div>
+        <div class="inspiration-card">
+          <div class="insp-tag tag-exercise">活经舒腰</div>
+          <div class="insp-text">一到下午四五点就腰酸背痛，中医里的"撞背八打"或导引放松该如何安全进行？</div>
+        </div>
+      </div>
+
+      <!-- Mental -->
+      <h3 style="margin-top:32px; margin-bottom:4px;">🧠 安心情志</h3>
+      <div class="inspiration-grid">
+        <div class="inspiration-card">
+          <div class="insp-tag tag-mental">三分钟静心</div>
+          <div class="insp-text">工作压力太大、情绪偶尔陷入低谷无法集中，有适合现在的三分钟深呼吸吐气调息诀吗？</div>
+        </div>
+        <div class="inspiration-card">
+          <div class="insp-tag tag-mental">安神足浴</div>
+          <div class="insp-text">晚上虚烦、辗转反侧总是入睡不了。推荐一剂可以使人宁神静气的温汤泡脚中药配方。</div>
+        </div>
+        <div class="inspiration-card">
+          <div class="insp-tag tag-mental">舒胸平绪</div>
+          <div class="insp-text">焦虑烦躁时总觉得胸闷。据说按揉手腕或手掌上的安神秘密穴位立竿见影，定位是什么？</div>
+        </div>
+        <div class="inspiration-card">
+          <div class="insp-tag tag-mental">疏肝悦志</div>
+          <div class="insp-text">容易悲忧叹气、总觉得胸中有一股"气结"，中医如何通过药膳冲茶帮助疏肝解郁？</div>
+        </div>
+      </div>
+
+      <!-- Wellness -->
+      <h3 style="margin-top:32px; margin-bottom:4px;">🍃 时辰穴位</h3>
+      <div class="inspiration-grid">
+        <div class="inspiration-card">
+          <div class="insp-tag tag-wellness">十二时辰</div>
+          <div class="insp-text">十二时辰按节气轮流当令。当前这个时辰，身体哪条经络最兴盛？应该怎么顺时调养？</div>
+        </div>
+        <div class="inspiration-card">
+          <div class="insp-tag tag-wellness">回阳暖肢</div>
+          <div class="insp-text">手脚一降温就冰凉怕冷，听说艾灸或按揉"足三里"、"涌泉"很管用，具体如何按抚？</div>
+        </div>
+        <div class="inspiration-card">
+          <div class="insp-tag tag-wellness">固元双穴</div>
+          <div class="insp-text">上班久坐不运动。怎么点揉我们脚踝内侧的"太溪穴"或"三阴交"，以固本培元、补养气血？</div>
+        </div>
+        <div class="inspiration-card">
+          <div class="insp-tag tag-wellness">排湿排痹</div>
+          <div class="insp-text">进入闷热或转季，身体常有湿气重、头重脚轻之感，有哪些经穴拍打或排湿方法？</div>
+        </div>
+      </div>
+
+      <!-- Surprise -->
+      <h3 style="margin-top:32px; margin-bottom:4px;">🎁 随缘妙用</h3>
+      <div class="inspiration-grid">
+        <div class="inspiration-card">
+          <div class="insp-tag tag-surprise">养生随缘签</div>
+          <div class="insp-text">给我摇一个适合我今天的"东方随缘养生今日签"。宜什么、忌什么、有什么温和妙法？</div>
+        </div>
+        <div class="inspiration-card">
+          <div class="insp-tag tag-surprise">神医奇事</div>
+          <div class="insp-text">大医，用白话讲讲古代神医（比如李时珍或孙思邈）发生的有趣日常养生小故事吧！</div>
+        </div>
+        <div class="inspiration-card">
+          <div class="insp-tag tag-surprise">打油暖身诀</div>
+          <div class="insp-text">编一首古风活波好记的"常回家晒背口诀"或日常暖身歌谣，让我读后舒畅大笑。</div>
+        </div>
+        <div class="inspiration-card">
+          <div class="insp-tag tag-surprise">极简冷知识</div>
+          <div class="insp-text">给我一个适合现代懒人的"养生超级冷知识"，能轻松运用在每天生活的细节里。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== WELCOME MESSAGES ===================== -->
+<section>
+  <div class="container">
+    <span class="label-uppercase">Welcome Messages</span>
+    <h2>双版本欢迎语体系</h2>
+    <div class="section-divider"></div>
+    <p style="max-width:720px; margin-bottom: 24px;">
+      每个模块配备两个版本的欢迎语：<strong>标准版</strong>（详细功能介绍）和<strong>无障碍版</strong>（简洁口语化，适合老年用户）。
+      欢迎语承担"破冰"和"能力告知"的双重职责。
+    </p>
+
+    <div class="welcome-grid">
+      <div class="welcome-card">
+        <div class="wc-header">
+          <span class="wc-emoji">🍱</span>
+          <span class="wc-label">应季饮食</span>
+        </div>
+        <div class="wc-text">施主好！我是您的应季膳方助理。请说说您最近的饮食情况：比如是否有脾胃虚弱、容易胀气、反酸，或是口舌干燥干渴？当前正值节气运行交替，大医会为您量体裁配药膳方或亮眼茶饮。支持拖拽或直接发送买菜/食物/舌相照片来进行解析品评哦。</div>
+        <div class="wc-accessible">施主好，大医来陪您挑拣吃食。平时胃口能开吗，是否有积食反酸，或是大便不调？写字或长按底下红色话筒跟我说说，大医给您送个暖胃茶饮膳底。发个吃食或舌头照片也成。</div>
+      </div>
+
+      <div class="welcome-card">
+        <div class="wc-header">
+          <span class="wc-emoji">🏃</span>
+          <span class="wc-label">导引运动</span>
+        </div>
+        <div class="wc-text">施主好！我是您的气血导引助理。久坐不仅压迫百骨，肌肉也易血瘀酸刺。您最近是否有颈椎胀紧、手酸发凉，还是肩膀无法舒展？我将带您习练几记八段锦秘传口诀，或是十秒极简速效拉筋。发送疼痛位置照片也能帮您研判哦。</div>
+        <div class="wc-accessible">施主好！久坐对筋骨损耗很大。您有腰腿紧酸、肩膀发沉吗？跟我说说哪里不痛快，大医教您一两招八段锦或者拉伸招数，舒展筋络，特别管用。</div>
+      </div>
+
+      <div class="welcome-card">
+        <div class="wc-header">
+          <span class="wc-emoji">🧠</span>
+          <span class="wc-label">宁神心理</span>
+        </div>
+        <div class="wc-text">施主好！我是您的情志安神助理。尘杂烦乱，心气常为杂陈困阻。您是否感觉容易疲倦无神、深夜纷乱难眠，还是胸闷容易叹气？在大医这里，您可以倾诉满心压力，我会为您施用本草香薰泡饮、或者三分钟静心吐纳，给您安心调护。</div>
+        <div class="wc-accessible">施主好！心中清爽，身体自然无恙。最近睡觉踏实吗，白天是不是心里搁着心事？告诉大医关切之处，大医给您出出气解解闷，顺应吐纳，人就轻松喽。</div>
+      </div>
+
+      <div class="welcome-card">
+        <div class="wc-header">
+          <span class="wc-emoji">🍃</span>
+          <span class="wc-label">时穴养生</span>
+        </div>
+        <div class="wc-text">施主好！我是您的经穴流注助理。天人相应，经气顺时流转。请详陈您的胃病、头痛、双腿冰凉或亚健康疲乏，我将为您精准定位当下时辰当令的御邪经脉，教您点揉什么穴位、手法及揉穴口诀，恢复身心元本。</div>
+        <div class="wc-accessible">施主好！按按穴位，气血就通了。您现在哪里不舒服，手脚容易怕冷发凉吗？大医来告诉您按揉哪个穴位管用。手法口诀仔细，听得懂也学得快！</div>
+      </div>
+
+      <div class="welcome-card">
+        <div class="wc-header">
+          <span class="wc-emoji">🎁</span>
+          <span class="wc-label">随缘彩蛋</span>
+        </div>
+        <div class="wc-text">施主好！我是您的东方彩蛋助理。阁主已备一签金光璀璨的「养生随缘吉祥签」，或者是古代名医日常生活小趣闻以贻施主。请问您想摇一签来了解今日颐养宜忌，还是想探听一二神医孙思邈的本草奇遇？</div>
+        <div class="wc-accessible">施主好！今天阁主给您备了张好运气色签，还有李时珍种草药的逗趣故事。您说句话，咱们现在就摇一签看运势！</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== DESIGN PATTERNS ===================== -->
+<section style="background: var(--color-surface-dark); color: var(--color-on-dark);">
+  <div class="container">
+    <span class="label-uppercase" style="color: var(--color-on-dark-soft);">Prompt Engineering Patterns</span>
+    <h2 style="color: var(--color-on-dark);">设计模式总结</h2>
+    <div class="section-divider" style="background: var(--color-primary);"></div>
+
+    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px,1fr)); gap:24px; margin-top:24px;">
+      <div style="background:var(--color-surface-dark-elevated); padding:28px; border-radius:var(--radius-lg);">
+        <h3 style="color:var(--color-accent-amber); font-size:1.2rem;">单端点多态</h3>
+        <p style="color:var(--color-on-dark-soft); font-size:0.95rem; margin-top:8px;">
+          一个 <code style="color:var(--color-primary);">/api/chat</code> 端点通过 <code style="color:var(--color-primary);">activeModule</code> 参数动态切换 Agent 人格，避免了多端点维护成本。
+        </p>
+      </div>
+
+      <div style="background:var(--color-surface-dark-elevated); padding:28px; border-radius:var(--radius-lg);">
+        <h3 style="color:var(--color-accent-teal); font-size:1.2rem;">四段式 Prompt 拼接</h3>
+        <p style="color:var(--color-on-dark-soft); font-size:0.95rem; margin-top:8px;">
+          人设层 → 焦点层 → 规则层 → 免责层，结构清晰、职责分明。焦点层作为唯一变量插入固定框架。
+        </p>
+      </div>
+
+      <div style="background:var(--color-surface-dark-elevated); padding:28px; border-radius:var(--radius-lg);">
+        <h3 style="color:var(--color-accent-amber); font-size:1.2rem;">种子 Prompt 引导</h3>
+        <p style="color:var(--color-on-dark-soft); font-size:0.95rem; margin-top:8px;">
+          20 条快捷灵感是精心设计的"种子"，展示能力边界并引导用户进入高质量对话路径，降低冷启动门槛。
+        </p>
+      </div>
+
+      <div style="background:var(--color-surface-dark-elevated); padding:28px; border-radius:var(--radius-lg);">
+        <h3 style="color:var(--color-accent-teal); font-size:1.2rem;">双版本欢迎语</h3>
+        <p style="color:var(--color-on-dark-soft); font-size:0.95rem; margin-top:8px;">
+          标准版（详细功能介绍）+ 无障碍版（简洁口语化），兼顾信息传递和老年用户友好性。
+        </p>
+      </div>
+
+      <div style="background:var(--color-surface-dark-elevated); padding:28px; border-radius:var(--radius-lg);">
+        <h3 style="color:var(--color-accent-amber); font-size:1.2rem;">语气人格统一</h3>
+        <p style="color:var(--color-on-dark-soft); font-size:0.95rem; margin-top:8px;">
+          "施主"、"善哉"、"大医"等称呼贯穿所有模块，配合东方雅致语言，建立强烈的品牌辨识度。
+        </p>
+      </div>
+
+      <div style="background:var(--color-surface-dark-elevated); padding:28px; border-radius:var(--radius-lg);">
+        <h3 style="color:var(--color-accent-teal); font-size:1.2rem;">多模态感知</h3>
+        <p style="color:var(--color-on-dark-soft); font-size:0.95rem; margin-top:8px;">
+          Prompt 中明确要求处理食物照片、舌苔图片、疼痛位置照片等，配合 Gemini 的视觉能力实现多模态养生咨询。
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== FOOTER ===================== -->
+<footer class="page-footer">
+  <p>灵枢·五觉养生阁 — Prompt 架构分析文档</p>
+  <p style="margin-top:8px; font-size:0.78rem;">基于 Claude Design System 绘制 · 仅供分析参考，不影响原项目设计</p>
+</footer>
+
+</body>
+</html>
