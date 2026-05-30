@@ -79,12 +79,16 @@ COZE_WORKFLOWS = {
         "token": os.getenv("COZE_SURPRISE_TOKEN", ""),
         "type": "workflow",
         "param_key": "input",
+        "chatflow_id": os.getenv("COZE_SURPRISE_CHATFLOW_ID", ""),
+        "chatflow_token": os.getenv("COZE_SURPRISE_CHATFLOW_TOKEN", ""),
     },
 }
 
 print(f"[配置] COZE_BASE_URL: {COZE_BASE_URL}")
 for mod, cfg in COZE_WORKFLOWS.items():
-    print(f"[配置] Coze {mod}: workflow_id={cfg['id'][:8] if cfg['id'] else '(empty)'}...")
+    wf_id = cfg['id'][:8] if cfg['id'] else '(empty)'
+    cf_id = cfg.get('chatflow_id', '')[:8] if cfg.get('chatflow_id') else '-'
+    print(f"[配置] Coze {mod}: workflow_id={wf_id}..., chatflow_id={cf_id}")
 
 # 初始化 OSS 客户端
 _oss_bucket = None
@@ -217,6 +221,213 @@ def call_coze_workflow(module: str, user_input: str, image_url: str = "") -> Opt
         return None
 
 
+def call_coze_chatflow(module: str, user_input: str, image_url: str) -> Optional[str]:
+    """
+    调用 Coze chatflow（两轮 SSE，支持 Interrupt/Resume）。
+    用于需要图片输入的交互式工作流（如面部分析）。
+
+    流程：
+      第一轮 POST /v1/workflows/chat → Interrupt（选择卡片）+ conversation_id
+      第二轮 POST /v1/workflows/chat → 携带 conversation_id + tool_outputs 续接 → 最终结果
+    """
+    import time
+
+    cfg = COZE_WORKFLOWS.get(module)
+    if not cfg:
+        return None
+
+    chatflow_id = cfg.get("chatflow_id") or cfg["id"]
+    token = cfg.get("chatflow_token") or cfg["token"]
+
+    if not chatflow_id or not token:
+        print(f"[Chatflow] {module} 配置不完整，跳过")
+        return None
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
+    t0 = time.time()
+
+    # ── 第一轮：发起 chatflow ──
+    payload_step1 = {
+        "workflow_id": chatflow_id,
+        "parameters": {
+            "CONVERSATION_NAME": "Default",
+            "USER_INPUT": user_input or "帮我分析一下",
+            "user_image": image_url,
+        },
+        "additional_messages": [
+            {
+                "content": user_input or "帮我分析一下",
+                "content_type": "text",
+                "role": "user",
+                "type": "question",
+            }
+        ],
+    }
+
+    try:
+        print(f"[Chatflow] {module} 第一轮发起...")
+        resp = http_requests.post(
+            f"{COZE_BASE_URL}/v1/workflows/chat",
+            headers=headers,
+            json=payload_step1,
+            stream=True,
+            timeout=90,
+        )
+        resp.raise_for_status()
+
+        answer_text = ""
+        conversation_id = None
+        has_interrupt = False
+
+        for line in resp.iter_lines(decode_unicode=True):
+            if not line or not line.startswith("data:"):
+                continue
+            data_str = line[5:].strip()
+            if not data_str or data_str == "[DONE]":
+                break
+            try:
+                event = json.loads(data_str)
+            except json.JSONDecodeError:
+                continue
+
+            # 提取 conversation_id
+            cid = event.get("conversation_id")
+            if cid and not conversation_id:
+                conversation_id = cid
+
+            # 提取助手回复
+            role = event.get("role", "")
+            msg_type = event.get("type", "")
+            content = event.get("content", "")
+
+            if role == "assistant" and msg_type == "answer" and content:
+                answer_text += content
+
+            # 检测 Interrupt
+            if msg_type == "verbose" and "interrupt" in content:
+                has_interrupt = True
+                print(f"[Chatflow] {module} 检测到 Interrupt")
+
+        t1 = time.time()
+        print(f"[Chatflow] {module} 第一轮耗时: {t1-t0:.1f}s, "
+              f"conversation_id={conversation_id}, interrupt={has_interrupt}")
+
+        # ── 检测到 Interrupt → 返回选择项，由用户决定 ──
+        if has_interrupt and conversation_id:
+            # 解析选择卡片中的选项（格式："- 选项名"）
+            choices = []
+            for line in answer_text.split("\n"):
+                line = line.strip()
+                if line.startswith("- "):
+                    choices.append(line[2:].strip())
+
+            t1 = time.time()
+            print(f"[Chatflow] {module} 第一轮耗时: {t1-t0:.1f}s, "
+                  f"Interrupt! 选项: {choices}")
+
+            return {
+                "chatflow_choices": choices or ["聊养生", "算运势"],
+                "chatflow_conversation_id": conversation_id,
+                "chatflow_text": answer_text,
+            }
+
+        total = time.time() - t0
+        print(f"[Chatflow] {module} 总耗时: {total:.1f}s")
+        return answer_text if answer_text else None
+
+    except Exception as e:
+        print(f"[Chatflow] {module} 调用失败: {type(e).__name__}: {e}")
+        return None
+
+
+def resume_coze_chatflow(module: str, conversation_id: str, user_choice: str) -> Optional[str]:
+    """
+    续接被 Interrupt 的 Coze chatflow。
+    携带 conversation_id + tool_outputs 发送用户选择，获取最终结果。
+    """
+    import time
+
+    cfg = COZE_WORKFLOWS.get(module)
+    if not cfg:
+        return None
+
+    chatflow_id = cfg.get("chatflow_id") or cfg["id"]
+    token = cfg.get("chatflow_token") or cfg["token"]
+
+    if not chatflow_id or not token:
+        return None
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
+
+    payload = {
+        "workflow_id": chatflow_id,
+        "conversation_id": conversation_id,
+        "parameters": {
+            "CONVERSATION_NAME": "Default",
+            "USER_INPUT": user_choice,
+        },
+        "additional_messages": [
+            {
+                "content": user_choice,
+                "content_type": "text",
+                "role": "user",
+                "type": "question",
+            }
+        ],
+        "tool_outputs": [
+            {
+                "tool_call_id": "reply_message",
+                "output": user_choice,
+            }
+        ],
+    }
+
+    t0 = time.time()
+    try:
+        print(f"[Chatflow] {module} 续接: choice='{user_choice}', conversation_id={conversation_id}")
+        resp = http_requests.post(
+            f"{COZE_BASE_URL}/v1/workflows/chat",
+            headers=headers,
+            json=payload,
+            stream=True,
+            timeout=120,
+        )
+        resp.raise_for_status()
+
+        answer_text = ""
+        for line in resp.iter_lines(decode_unicode=True):
+            if not line or not line.startswith("data:"):
+                continue
+            data_str = line[5:].strip()
+            if not data_str or data_str == "[DONE]":
+                break
+            try:
+                event = json.loads(data_str)
+            except json.JSONDecodeError:
+                continue
+
+            role = event.get("role", "")
+            msg_type = event.get("type", "")
+            content = event.get("content", "")
+
+            if role == "assistant" and msg_type == "answer" and content:
+                answer_text += content
+
+        total = time.time() - t0
+        print(f"[Chatflow] {module} 续接耗时: {total:.1f}s, 输出长度: {len(answer_text)}字")
+        return answer_text if answer_text else None
+
+    except Exception as e:
+        print(f"[Chatflow] {module} 续接失败: {type(e).__name__}: {e}")
+        return None
+
+
 def check_relevance(question: str, answer: str) -> bool:
     """用 LLM 判断回答是否与问题相关。返回 True 表示相关。"""
     try:
@@ -255,6 +466,7 @@ class Message(BaseModel):
 class ChatRequest(BaseModel):
     activeModule: str
     messages: list[Message]
+    chatflow_conversation_id: Optional[str] = None
 
 # ===== Prompt 构建 =====
 def build_module_focus(active_module: str) -> str:
@@ -363,6 +575,25 @@ async def chat(request: ChatRequest):
                                 print(f"[图片] OSS 上传失败: {img_err}")
                 if user_latest:
                     break
+
+        # 惊喜模块 chatflow 续接（用户点击了选择按钮）
+        if request.chatflow_conversation_id and request.activeModule == "surprise":
+            resume_result = resume_coze_chatflow(
+                "surprise", request.chatflow_conversation_id, user_latest
+            )
+            if resume_result:
+                return {"text": resume_result}
+            print("[Chatflow] 续接失败，回退到普通流程")
+
+        # 惊喜模块 + 图片 → 走 chatflow（面部分析，SSE Interrupt → 返回选择项）
+        if request.activeModule == "surprise" and image_url:
+            chatflow_result = call_coze_chatflow("surprise", user_latest, image_url)
+            if isinstance(chatflow_result, dict):
+                # Interrupt → 返回选择项给前端
+                return chatflow_result
+            if isinstance(chatflow_result, str) and chatflow_result:
+                return {"text": chatflow_result}
+            print("[Chatflow] 面部分析失败，回退到普通工作流")
 
         # 优先使用 Coze 工作流（60秒超时）
         coze_result = call_coze_workflow(request.activeModule, user_latest, image_url)

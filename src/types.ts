@@ -13,6 +13,8 @@ export interface Message {
   isAudioPlaying?: boolean;
   activeModule?: "diet" | "exercise" | "mental" | "wellness" | "surprise";
   attachments?: Attachment[];
+  choices?: string[];                   // Chatflow 选择项
+  chatflowConversationId?: string;      // Chatflow 会话 ID，用于续接
 }
 
 export type ModuleType = "diet" | "exercise" | "mental" | "wellness" | "surprise";

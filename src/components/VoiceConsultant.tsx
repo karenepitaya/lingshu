@@ -338,6 +338,23 @@ export default function VoiceConsultant({
         throw new Error(data.error || "API request failed");
       }
 
+      // Chatflow Interrupt → 返回选择项
+      if (data.chatflow_choices) {
+        const botMsg: Message = {
+          id: "msg-" + (Date.now() + 1),
+          role: "assistant",
+          text: data.chatflow_text || "请选择：",
+          timestamp: new Date(),
+          choices: data.chatflow_choices,
+          chatflowConversationId: data.chatflow_conversation_id,
+        };
+        setMessages((prev) => [...prev, botMsg]);
+        setStreamingId(botMsg.id);
+        onStreamingChange?.(true);
+        speakText(data.chatflow_text);
+        return;
+      }
+
       const botMsg: Message = {
         id: "msg-" + (Date.now() + 1),
         role: "assistant",
@@ -368,6 +385,64 @@ export default function VoiceConsultant({
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     handleSend(input);
+  };
+
+  // Chatflow 选择按钮点击 → 带 conversation_id 续接
+  const handleChoiceClick = (choice: string, conversationId: string) => {
+    // 把选择项作为用户消息显示
+    const userMsg: Message = {
+      id: "msg-" + Date.now(),
+      role: "user",
+      text: choice,
+      timestamp: new Date(),
+    };
+    setMessages((prev) => [...prev, userMsg]);
+    setLoading(true);
+
+    // 带 conversation_id 发送续接请求
+    (async () => {
+      try {
+        const response = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            activeModule: activeModule,
+            messages: [{ role: "user", text: choice }],
+            chatflow_conversation_id: conversationId,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || "API request failed");
+        }
+
+        const botMsg: Message = {
+          id: "msg-" + (Date.now() + 1),
+          role: "assistant",
+          text: data.text || "分析完成，请查看上方结果。",
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, botMsg]);
+        setStreamingId(botMsg.id);
+        onStreamingChange?.(true);
+        speakText(data.text);
+      } catch (error: any) {
+        console.error("Chatflow resume failed:", error);
+        const errorMsg: Message = {
+          id: "msg-err-" + Date.now(),
+          role: "assistant",
+          text: "抱歉，续接分析时出现了问题。请重新上传图片再试一次。",
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, errorMsg]);
+        setStreamingId(errorMsg.id);
+        onStreamingChange?.(true);
+      } finally {
+        setLoading(false);
+      }
+    })();
   };
 
   // Markdown rendering styling configuration that is highly readable on both light and dark backgrounds
@@ -709,19 +784,44 @@ export default function VoiceConsultant({
                       {displayedText}
                     </p>
                   ) : (
-                    msg.id === streamingId ? (
-                      <TypewriterRenderer 
-                        text={displayedText} 
-                        onComplete={() => {
-                          setStreamingId(null);
-                          onStreamingChange?.(false);
-                        }}
-                      />
-                    ) : (
-                      <div className="markdown-body">
-                        <Markdown remarkPlugins={[remarkGfm]} components={getMarkdownComponents(isDarkMode || false, isLargeFont)}>{displayedText}</Markdown>
-                      </div>
-                    )
+                    <>
+                      {msg.id === streamingId ? (
+                        <TypewriterRenderer
+                          text={displayedText}
+                          onComplete={() => {
+                            setStreamingId(null);
+                            onStreamingChange?.(false);
+                          }}
+                        />
+                      ) : (
+                        <div className="markdown-body">
+                          <Markdown remarkPlugins={[remarkGfm]} components={getMarkdownComponents(isDarkMode || false, isLargeFont)}>{displayedText}</Markdown>
+                        </div>
+                      )}
+                      {/* Chatflow 选择按钮 */}
+                      {msg.choices && msg.choices.length > 0 && msg.chatflowConversationId && (
+                        <div className="flex flex-wrap gap-2 mt-3">
+                          {msg.choices.map((choice, cIdx) => (
+                            <button
+                              key={cIdx}
+                              onClick={() => handleChoiceClick(choice, msg.chatflowConversationId!)}
+                              disabled={loading}
+                              className={`font-extrabold border-2 transition-all cursor-pointer ${
+                                isLargeFont
+                                  ? "text-sm px-5 py-3 rounded-2xl"
+                                  : "text-xs px-4 py-2.5 rounded-xl"
+                              } ${
+                                isDarkMode
+                                  ? "bg-emerald-950/60 border-emerald-700/50 text-emerald-200 hover:bg-emerald-800/50 hover:border-emerald-500"
+                                  : "bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100 hover:border-emerald-500"
+                              } disabled:opacity-50 disabled:cursor-not-allowed`}
+                            >
+                              {choice}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
                 
