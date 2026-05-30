@@ -9,3 +9,5 @@ coverage/
 node_modules
 __pycache__
 .env
+temp_images/
+test-results/

@@ -14,7 +14,7 @@ export default function CategorySelector({ activeModule, onSelectModule, isLarge
     {
       id: "diet" as ModuleType,
       title: "饮食",
-      desc: "应季食疗 · 膳方养人",
+      desc: "健康食疗 · 膳方养人",
       icon: Utensils,
       bg: "bg-amber-50/50 hover:bg-amber-50",
       activeBorder: "border-amber-400 ring-2 ring-amber-400/20",
@@ -159,7 +159,7 @@ export default function CategorySelector({ activeModule, onSelectModule, isLarge
                     ? "text-[12.5px] font-extrabold" 
                     : "text-xs font-bold"
               } ${textClass}`}>
-                {cat.id === "diet" ? "应季饮食" : cat.title}
+                {cat.id === "diet" ? "健康饮食" : cat.title}
               </span>
               {!isLargeFont && (
                 <span className={`text-[9px] font-semibold leading-none mt-1 ${labelClass}`}>

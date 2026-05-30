@@ -4,7 +4,11 @@
 """
 
 import os
+import json
 import base64
+import uuid
+import oss2
+import requests as http_requests
 from datetime import datetime
 from typing import Optional
 
@@ -23,15 +27,217 @@ OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "mimo-v2.5")
 TEMPERATURE = 0.75
 
+PUBLIC_URL = os.getenv("PUBLIC_URL", "http://localhost:6001")
+
+# 阿里云 OSS 配置（用于 Coze chatflow 图片传入）
+OSS_ACCESS_KEY_ID = os.getenv("OSS_ACCESS_KEY_ID", "")
+OSS_ACCESS_KEY_SECRET = os.getenv("OSS_ACCESS_KEY_SECRET", "")
+OSS_BUCKET_NAME = os.getenv("OSS_BUCKET_NAME", "")
+OSS_ENDPOINT = os.getenv("OSS_ENDPOINT", "")
+OSS_PUBLIC_URL = os.getenv("OSS_PUBLIC_URL", "")
+
 print(f"[配置] OPENAI_BASE_URL: {OPENAI_BASE_URL}")
 print(f"[配置] OPENAI_API_KEY: {OPENAI_API_KEY[:10]}...")
 print(f"[配置] MODEL_NAME: {MODEL_NAME}")
+print(f"[配置] OSS_BUCKET: {OSS_BUCKET_NAME}")
 
 # ===== OpenAI 客户端 =====
 client = OpenAI(
     api_key=OPENAI_API_KEY,
     base_url=OPENAI_BASE_URL,
 )
+
+# ===== Coze 工作流配置 =====
+COZE_BASE_URL = os.getenv("COZE_BASE_URL", "https://api.coze.cn")
+COZE_WORKFLOWS = {
+    "diet": {
+        "id": os.getenv("COZE_DIET_WORKFLOW_ID", ""),
+        "token": os.getenv("COZE_DIET_TOKEN", ""),
+        "type": "workflow",
+        "param_key": "input",
+    },
+    "exercise": {
+        "id": os.getenv("COZE_EXERCISE_WORKFLOW_ID", ""),
+        "token": os.getenv("COZE_EXERCISE_TOKEN", ""),
+        "type": "workflow",
+        "param_key": "input",
+    },
+    "mental": {
+        "id": os.getenv("COZE_MENTAL_WORKFLOW_ID", ""),
+        "token": os.getenv("COZE_MENTAL_TOKEN", ""),
+        "type": "workflow",
+        "param_key": "input",
+    },
+    "wellness": {
+        "id": os.getenv("COZE_WELLNESS_WORKFLOW_ID", ""),
+        "token": os.getenv("COZE_WELLNESS_TOKEN", ""),
+        "type": "workflow",
+        "param_key": "user_input",
+    },
+    "surprise": {
+        "id": os.getenv("COZE_SURPRISE_WORKFLOW_ID", ""),
+        "token": os.getenv("COZE_SURPRISE_TOKEN", ""),
+        "type": "workflow",
+        "param_key": "input",
+    },
+}
+
+print(f"[配置] COZE_BASE_URL: {COZE_BASE_URL}")
+for mod, cfg in COZE_WORKFLOWS.items():
+    print(f"[配置] Coze {mod}: workflow_id={cfg['id'][:8] if cfg['id'] else '(empty)'}...")
+
+# 初始化 OSS 客户端
+_oss_bucket = None
+if OSS_ACCESS_KEY_ID and OSS_ACCESS_KEY_SECRET and OSS_BUCKET_NAME and OSS_ENDPOINT:
+    try:
+        _auth = oss2.Auth(OSS_ACCESS_KEY_ID, OSS_ACCESS_KEY_SECRET)
+        _oss_bucket = oss2.Bucket(_auth, OSS_ENDPOINT, OSS_BUCKET_NAME)
+        print(f"[配置] OSS 客户端初始化成功: {OSS_BUCKET_NAME}")
+    except Exception as e:
+        print(f"[配置] OSS 客户端初始化失败: {e}")
+
+
+def upload_image_to_oss(base64_data: str, mime_type: str) -> str:
+    """将 base64 图片上传到阿里云 OSS，返回公网 URL"""
+    if not _oss_bucket:
+        raise RuntimeError("OSS 客户端未初始化")
+
+    ext = mime_type.split("/")[-1].split(";")[0]
+    if ext not in ("png", "jpg", "jpeg", "gif", "webp"):
+        ext = "png"
+    filename = f"coze-images/{uuid.uuid4().hex}.{ext}"
+    img_bytes = base64.b64decode(base64_data)
+
+    _oss_bucket.put_object(filename, img_bytes)
+    url = f"{OSS_PUBLIC_URL}/{filename}"
+    print(f"[OSS] 上传成功: {url}")
+    return url
+
+
+def call_coze_workflow(module: str, user_input: str, image_url: str = "") -> Optional[str]:
+    """调用 Coze 工作流，返回结果文本。失败返回 None。"""
+    import time
+    cfg = COZE_WORKFLOWS.get(module)
+    if not cfg or not cfg["id"] or not cfg["token"]:
+        print(f"[Coze] {module} 配置不完整，跳过")
+        return None
+
+    headers = {
+        "Authorization": f"Bearer {cfg['token']}",
+        "Content-Type": "application/json",
+    }
+    t0 = time.time()
+
+    if cfg["type"] == "chatflow":
+        # chatflow 使用 /v1/workflows/chat 端点
+        url = f"{COZE_BASE_URL}/v1/workflows/chat"
+        payload = {
+            "workflow_id": cfg["id"],
+            "parameters": {
+                "CONVERSATION_NAME": "Default",
+                cfg["param_key"]: user_input,
+                "user_image": image_url,
+            },
+            "additional_messages": [
+                {
+                    "content": user_input,
+                    "content_type": "text",
+                    "role": "user",
+                    "type": "question",
+                }
+            ],
+        }
+    else:
+        # workflow 使用 /v1/workflow/stream_run 端点
+        url = f"{COZE_BASE_URL}/v1/workflow/stream_run"
+        payload = {
+            "workflow_id": cfg["id"],
+            "parameters": {
+                cfg["param_key"]: user_input,
+            },
+        }
+
+    try:
+        resp = http_requests.post(url, headers=headers, json=payload, stream=True, timeout=60)
+        t1 = time.time()
+        print(f"[Coze] {module} 连接耗时: {t1-t0:.1f}s, 状态: {resp.status_code}")
+        resp.raise_for_status()
+
+        # 解析 SSE 流，提取最终输出
+        # Workflow SSE 事件格式：
+        #   - node_type="Message": 包含实际回复内容 (content 字段)
+        #   - node_type="End": 工作流结束标记，content 为空
+        #   - 仅有 debug_url: 调试信息，忽略
+        # Chatflow SSE 事件格式：
+        #   - role="assistant", type="answer": 包含实际回复内容 (content 字段)
+        #   - status="completed": 聊天结束
+        #   - 仅有 debug_url: 调试信息，忽略
+        output = ""
+        for line in resp.iter_lines(decode_unicode=True):
+            if not line or not line.startswith("data:"):
+                continue
+            data_str = line[5:].strip()
+            if not data_str or data_str == "[DONE]":
+                break
+            try:
+                event = json.loads(data_str)
+                content = event.get("content", "")
+                node_type = event.get("node_type", "")
+                role = event.get("role", "")
+                msg_type = event.get("type", "")
+
+                # Workflow: 取有内容的事件（Message 或 End 节点都可能携带内容）
+                if content and not role:
+                    output = content
+                # Chatflow: 取 assistant 的 answer 类型消息
+                elif role == "assistant" and msg_type == "answer" and content:
+                    output = content
+            except json.JSONDecodeError:
+                continue
+
+        t2 = time.time()
+
+        # 尝试解析 JSON 输出（某些工作流返回 {"output": "..."} 格式）
+        if output:
+            try:
+                parsed = json.loads(output)
+                if isinstance(parsed, dict) and "output" in parsed:
+                    output = parsed["output"]
+            except json.JSONDecodeError:
+                pass  # 不是 JSON，直接使用原文
+
+        print(f"[Coze] {module} 总耗时: {t2-t0:.1f}s, 输出长度: {len(output)}字")
+        return output if output else None
+
+    except Exception as e:
+        if "timeout" in type(e).__name__.lower() or "Timeout" in str(e):
+            print(f"[Coze] {module} 工作流超时(60s)，将回退到 LLM")
+        else:
+            print(f"[Coze] {module} 工作流调用失败: {type(e).__name__}: {e}")
+        return None
+
+
+def check_relevance(question: str, answer: str) -> bool:
+    """用 LLM 判断回答是否与问题相关。返回 True 表示相关。"""
+    try:
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {"role": "system", "content": '你是一个内容审核员。判断【回答】是否与【问题】相关且有意义。只回复"是"或"否"。'},
+                {"role": "user", "content": f"【问题】{question}\n\n【回答】{answer[:500]}"},
+            ],
+            temperature=0.1,
+            max_tokens=10,
+        )
+        result = (response.choices[0].message.content or "").strip()
+        is_relevant = "是" in result
+        print(f"[相关性检查] {'相关' if is_relevant else '不相关'}: {result}")
+        return is_relevant
+    except Exception as e:
+        print(f"[相关性检查] 失败: {e}")
+        return False  # 检查失败时默认不信任 Coze 结果
+
+
 
 # ===== FastAPI 应用 =====
 app = FastAPI(title="灵枢·五觉养生阁 API")
@@ -140,13 +346,41 @@ async def chat(request: ChatRequest):
     print(f"[收到请求] activeModule: {request.activeModule}")
     print(f"[收到请求] messages数量: {len(request.messages)}")
     try:
-        # 构建系统指令
-        system_instruction = build_system_instruction(request.activeModule)
+        # 提取用户最新一条消息（文本 + 图片）
+        user_latest = ""
+        image_url = ""
+        for msg in reversed(request.messages):
+            if msg.role == "user":
+                if msg.text:
+                    user_latest = msg.text
+                # 惊喜模块：将 base64 图片上传到 OSS 获取公网 URL
+                if msg.attachments and request.activeModule == "surprise":
+                    for att in msg.attachments:
+                        if att.data and att.mimeType:
+                            try:
+                                image_url = upload_image_to_oss(att.data, att.mimeType)
+                            except Exception as img_err:
+                                print(f"[图片] OSS 上传失败: {img_err}")
+                if user_latest:
+                    break
 
-        # 构建消息内容
+        # 优先使用 Coze 工作流（60秒超时）
+        coze_result = call_coze_workflow(request.activeModule, user_latest, image_url)
+
+        # Coze 有回复时，检查相关性
+        if coze_result:
+            print(f"[Coze] {request.activeModule} 工作流返回，检查相关性...")
+            if check_relevance(user_latest, coze_result):
+                print(f"[Coze] {request.activeModule} 回复相关，放行")
+                return {"text": coze_result}
+            else:
+                print(f"[Coze] {request.activeModule} 回复不相关，转交 LLM")
+
+        # Coze 不可用或回复不相关时，回退到 LLM
+        print(f"[回退] 使用 LLM ({request.activeModule})")
+        system_instruction = build_system_instruction(request.activeModule)
         contents = build_contents(request.messages)
 
-        # 调用 OpenAI 兼容 API
         response = client.chat.completions.create(
             model=MODEL_NAME,
             messages=[
@@ -156,7 +390,7 @@ async def chat(request: ChatRequest):
             temperature=TEMPERATURE,
         )
 
-        reply_text = response.choices[0].message.content or "施主安好。药炉薪火稍微有些波动，阁主已前去打点。请容大医再次聆听您的切身所问。"
+        reply_text = response.choices[0].message.content or "抱歉，回复出现了些问题。请再说一次您的问题，我重新为您解答。"
 
         return {"text": reply_text}
 
@@ -172,6 +406,8 @@ async def chat(request: ChatRequest):
             }
         )
 
+
+
 @app.get("/api/health")
 async def health_check():
     """健康检查接口"""
@@ -185,6 +421,135 @@ async def test_endpoint():
     """测试端点"""
     print("[测试] 测试端点被调用")
     return {"message": "测试成功"}
+
+
+# ===== 动态灵感生成 =====
+MODULE_META = {
+    "diet": {
+        "name": "健康食疗",
+        "desc": "中医膳食调理，结合节气与体质推荐食方",
+        "examples": [
+            {"text": "这段时间适合喝什么汤调理脾胃呀？", "label": "调脾胃"},
+            {"text": "想了解当季食材怎么搭配更健康", "label": "应季搭配"},
+            {"text": "最近总熬夜，饮食上能怎么补救", "label": "熬夜补救"},
+            {"text": "晚饭总是吃太多积食难消，有没有消食化积的小汤方？", "label": "消食解积"},
+        ],
+    },
+    "exercise": {
+        "name": "气血导引",
+        "desc": "传统导引运动功法，缓解久坐疲劳",
+        "examples": [
+            {"text": "最近总对着电脑，脖子太僵了", "label": "肩颈不适"},
+            {"text": "想学学八段锦的前三个动作", "label": "八段锦入门"},
+            {"text": "有哪些坐着也能练的拉伸法", "label": "办公拉伸"},
+            {"text": "一到下午就腰酸背痛，有什么简单的导引动作？", "label": "活经舒腰"},
+        ],
+    },
+    "mental": {
+        "name": "安心情志",
+        "desc": "情志调理与心理疏导，平和身心",
+        "examples": [
+            {"text": "最近老是莫名烦躁，有什么调理方法", "label": "情绪调理"},
+            {"text": "晚上睡不好总做梦，怎么能安神", "label": "安神助眠"},
+            {"text": "上班太焦虑了，有没有快速平复的方法", "label": "快速减压"},
+            {"text": "容易叹气、胸闷，有什么疏肝解郁的药茶推荐？", "label": "疏肝悦志"},
+        ],
+    },
+    "wellness": {
+        "name": "时辰穴位",
+        "desc": "子午流注与节气养生，穴位保健",
+        "examples": [
+            {"text": "每天什么时间段养生效果最好", "label": "最佳时辰"},
+            {"text": "秋冬换季怎么做才能不感冒", "label": "换季防护"},
+            {"text": "想了解足三里穴具体怎么按揉", "label": "穴位按揉"},
+            {"text": "手脚冰凉怕冷，艾灸哪些穴位最有效？", "label": "回阳暖肢"},
+        ],
+    },
+    "surprise": {
+        "name": "随缘妙用",
+        "desc": "趣味养生知识与传统智慧小彩蛋",
+        "examples": [
+            {"text": "推荐一个意想不到的养生小窍门", "label": "养生窍门"},
+            {"text": "有什么适合发朋友圈的养生金句", "label": "养生金句"},
+            {"text": "分享一个名医的有趣养生故事", "label": "名医趣闻"},
+            {"text": "给我摇一个今日养生签，宜什么忌什么？", "label": "养生随缘签"},
+        ],
+    },
+}
+
+@app.get("/api/inspirations/{module}")
+async def get_inspirations(module: str):
+    """为指定模块动态生成健康探讨话题建议"""
+    meta = MODULE_META.get(module)
+    if not meta:
+        raise HTTPException(status_code=400, detail=f"Unknown module: {module}")
+
+    # 构建 few-shot 提示词
+    examples_text = "\n".join(
+        f'  示例{i+1}: {{"text": "{ex["text"]}", "label": "{ex["label"]}"}}'
+        for i, ex in enumerate(meta["examples"])
+    )
+
+    prompt = (
+        f'你是"灵枢·五觉养生阁"的健康话题策划助手。\n'
+        f'请为【{meta["name"]}】模块生成4个全新的健康探讨话题建议。\n\n'
+        f'模块说明：{meta["desc"]}\n\n'
+        f'要求：\n'
+        f'1. 每个话题用自然口语化的中文，15-25字\n'
+        f'2. 贴合当前季节与节气\n'
+        f'3. 风格参考以下示例，但不要重复示例内容：\n'
+        f'{examples_text}\n\n'
+        f'4. label字段为2-4字的简短标签\n'
+        f'5. 4个话题角度各异，覆盖不同场景\n\n'
+        f'请严格返回JSON格式：\n'
+        f'{{"suggestions": [{{"text": "话题内容", "label": "标签"}}, ...]}}'
+    )
+
+    try:
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {"role": "system", "content": "你是一个健康话题策划助手，只输出JSON。"},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.8,
+            response_format={"type": "json_object"},
+        )
+
+        raw = response.choices[0].message.content or "{}"
+        parsed = json.loads(raw)
+        suggestions = parsed.get("suggestions", [])
+
+        # 验证格式
+        if not isinstance(suggestions, list) or len(suggestions) == 0:
+            raise ValueError("Invalid suggestions format")
+
+        # 确保每项有 text 和 label
+        validated = []
+        for item in suggestions[:4]:
+            if isinstance(item, dict) and "text" in item:
+                validated.append({
+                    "text": str(item["text"]),
+                    "label": str(item.get("label", "探讨")),
+                })
+
+        if len(validated) == 0:
+            raise ValueError("No valid suggestions")
+
+        # 不足 4 条时用硬编码补齐
+        if len(validated) < 4:
+            for ex in meta["examples"]:
+                if len(validated) >= 4:
+                    break
+                if not any(v["text"] == ex["text"] for v in validated):
+                    validated.append(ex)
+
+        return {"suggestions": validated}
+
+    except Exception as e:
+        print(f"[灵感生成] 失败，使用默认值: {type(e).__name__}: {e}")
+        # 失败时返回硬编码默认值
+        return {"suggestions": meta["examples"][:4]}
 
 # ===== 静态文件服务 =====
 # 生产环境：挂载 dist 目录

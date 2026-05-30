@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Sparkles, Soup, Heart, Footprints, Flower2, Gift, Lightbulb } from "lucide-react";
 import { ModuleType } from "../types";
 
@@ -10,10 +10,47 @@ interface QuickInspirationsProps {
 }
 
 export default function QuickInspirations({ activeModule, onSelectInspiration, isLargeFont, isDarkMode }: QuickInspirationsProps) {
+  const [dynamicList, setDynamicList] = useState<{ text: string; label: string }[] | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const cacheKey = `inspirations_${activeModule}`;
+
+    const cached = sessionStorage.getItem(cacheKey);
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setDynamicList(parsed);
+          return;
+        }
+      } catch {}
+    }
+
+    setIsLoading(true);
+    fetch(`/api/inspirations/${activeModule}`)
+      .then(res => res.json())
+      .then(data => {
+        if (cancelled) return;
+        const suggestions = data.suggestions;
+        if (Array.isArray(suggestions) && suggestions.length > 0) {
+          setDynamicList(suggestions);
+          sessionStorage.setItem(cacheKey, JSON.stringify(suggestions));
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [activeModule]);
+
   // Configured suggestions tailored based on activeModule
   const inspirationMappers: Record<ModuleType, { title: string; icon: any; color: string; list: { text: string; label: string }[] }> = {
     diet: {
-      title: "应季食疗",
+      title: "健康食疗",
       icon: Soup,
       color: "border-amber-500/20 text-amber-700 bg-amber-500/10",
       list: [
@@ -29,7 +66,7 @@ export default function QuickInspirations({ activeModule, onSelectInspiration, i
       color: "border-blue-500/20 text-blue-700 bg-blue-500/10",
       list: [
         { text: "久坐一整天不仅肩膀僵硬，颈椎也酸痛。有推荐哪个十秒钟即效的拉穴小动作？", label: "肩颈放松" },
-        { text: "常听八段锦有调和脏腑大功用。我脾胃不好，该专练里面的哪一式？动作要诀是什么？", label: "调脾胃神功" },
+        { text: "常听八段锦有调和脏腑大功用。我脾胃不好，该专练里面的哪一式？动作要诀是什么？", label: "调理脾胃" },
         { text: "眼睛看久了电脑干涩流泪，怎么按压眼周经络、摩擦生热来进行熨眼调理？", label: "明目熨眼" },
         { text: "一到下午四五点就腰酸背痛，中医里的“撞背八打”或导引放松该如何安全进行？", label: "活经舒腰" }
       ]
@@ -61,8 +98,8 @@ export default function QuickInspirations({ activeModule, onSelectInspiration, i
       icon: Gift,
       color: "border-purple-500/20 text-purple-700 bg-purple-500/10",
       list: [
-        { text: "给我摇一个适合我今天的“东方随缘养生今日签”。宜什么、忌什么、有什么温和妙法？", label: "养生随缘签" },
-        { text: "大医，用白话讲讲古代神医（比如李时珍或孙思邈）发生的有趣日常养生小故事吧！", label: "神医奇事" },
+        { text: "给我摇一个适合我今天的“东方随缘养生今日签”。宜什么、忌什么、有什么养生小贴士？", label: "养生随缘签" },
+        { text: "用白话讲讲古代名医（比如李时珍或孙思邈）发生的有趣日常养生小故事吧！", label: "名医趣闻" },
         { text: "编一首古风活波好记的“常回家晒背口诀”或日常暖身歌谣，让我读后舒畅大笑。", label: "打油暖身诀" },
         { text: "给我一个适合现代懒人的“养生超级冷知识”，能轻松运用在每天生活的细节里。", label: "极简冷知识" }
       ]
@@ -80,13 +117,13 @@ export default function QuickInspirations({ activeModule, onSelectInspiration, i
         <span className={`${isLargeFont ? "text-sm font-black" : "text-xs font-black"} ${
           isDarkMode ? "text-emerald-350" : "text-emerald-950"
         }`}>
-          「{currentMapper.title}」今日调理探讨：
+          「{currentMapper.title}」今日健康探讨：
         </span>
       </div>
 
       {/* Suggested horizontal grid buttons */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        {currentMapper.list.map((item, idx) => (
+        {(dynamicList ?? currentMapper.list).map((item, idx) => (
           <button
             key={idx}
             onClick={() => onSelectInspiration(item.text)}

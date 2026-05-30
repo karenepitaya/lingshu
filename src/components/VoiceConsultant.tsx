@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Message, ModuleType, Attachment } from "../types";
 import { 
   Send, User, Bot, Volume2, VolumeX, Mic, MicOff, 
@@ -16,36 +17,46 @@ interface VoiceConsultantProps {
   onStreamingChange?: (streaming: boolean) => void;
 }
 
-const moduleNames: Record<ModuleType, { label: string; icon: string; welcome: string; welcomeAccessible: string }> = {
+const moduleNames: Record<ModuleType, { label: string; icon: string; welcome: string; welcomeAccessible: string; placeholder: string; placeholderLarge: string }> = {
   diet: {
     label: "应季饮食",
     icon: "🍱",
-    welcome: "施主好！我是您的应季膳方助理。请说说您最近的饮食情况：比如是否有脾胃虚弱、容易胀气、反酸，或是口舌干燥干渴？当前正值节气运行交替，大医会为您量体裁配药膳方或亮眼茶饮。支持拖拽或直接发送买菜/食物/舌相照片来进行解析品评哦。",
-    welcomeAccessible: "施主好，大医来陪您挑拣吃食。平时胃口能开吗，是否有积食反酸，或是大便不调？写字或长按底下红色话筒跟我说说，大医给您送个暖胃茶饮膳底。发个吃食或舌头照片也成。"
+    welcome: "您好！我是您的应季膳食顾问。请说说您最近的饮食情况：比如是否有脾胃虚弱、容易胀气、反酸，或是口干口渴？当前正值节气交替，我会为您推荐合适的膳食方和茶饮。支持拖拽或直接发送食物、舌苔照片来辅助分析哦。",
+    welcomeAccessible: "您好，我来帮您调理饮食。平时胃口怎么样，有没有积食反酸或者大便不调？写字或长按底下红色话筒跟我说说，我给您推荐暖胃的茶饮膳方。发个食物或舌苔照片也行。",
+    placeholder: "说说您的脾胃状况、饮食偏好或养生需求…",
+    placeholderLarge: "写下您的脾胃状况或饮食偏好，放心写…"
   },
   exercise: {
     label: "导引运动",
     icon: "🏃",
-    welcome: "施主好！我是您的气血导引助理。久坐不仅压迫百骨，肌肉也易血瘀酸刺。您最近是否有颈椎胀紧、手酸发凉，还是肩膀无法舒展？我将带您习练几记八段锦秘传口诀，或是十秒极简速效拉筋。发送疼痛位置照片也能帮您研判哦。",
-    welcomeAccessible: "施主好！久坐对筋骨损耗很大。您有腰腿紧酸、肩膀发沉吗？跟我说说哪里不痛快，大医教您一两招八段锦或者拉伸招数，舒展筋络，特别管用。"
+    welcome: "您好！我是您的运动导引顾问。久坐容易导致肩颈僵硬、气血不畅。您最近是否有颈椎不适、手臂发凉，还是肩膀活动受限？我可以带您练习八段锦中的针对性招式，或做几组简单的拉伸放松。发送疼痛部位照片也能帮您分析哦。",
+    welcomeAccessible: "您好！久坐对筋骨损耗很大。您有腰腿酸紧、肩膀发沉吗？跟我说说哪里不舒服，我教您一两招八段锦或者拉伸动作，舒展筋络，很管用。",
+    placeholder: "告诉我哪里酸痛僵硬，或想学什么功法…",
+    placeholderLarge: "写下您哪里酸痛不舒服，放心写…"
   },
   mental: {
     label: "宁神心理",
     icon: "🧠",
-    welcome: "施主好！我是您的情志安神助理。尘杂烦乱，心气常为杂陈困阻。您是否感觉容易疲倦无神、深夜纷乱难眠，还是胸闷容易叹气？在大医这里，您可以倾诉满心压力，我会为您施用本草香薰泡饮、或者三分钟静心吐纳，给您安心调护。",
-    welcomeAccessible: "施主好！心中清爽，身体自然无恙。最近睡觉踏实吗，白天是不是心里搁着心事？告诉大医关切之处，大医给您出出气解解闷，顺应吐纳，人就轻松喽。"
+    welcome: "您好！我是您的情志调理顾问。压力和焦虑常常影响身心状态。您是否感觉容易疲倦、夜间难以入睡，或是胸闷喜欢叹气？您可以在这里倾诉，我会为您推荐安神茶饮或三分钟呼吸调息法，帮您舒缓放松。",
+    welcomeAccessible: "您好！心情舒畅，身体自然轻松。最近睡眠怎么样，白天是不是有心事？跟我说说困扰您的地方，我帮您疏导一下，做做呼吸练习，人就舒服了。",
+    placeholder: "聊聊您的情绪、压力或睡眠状况…",
+    placeholderLarge: "写下您的心情烦恼或睡眠问题，放心写…"
   },
   wellness: {
     label: "时穴养生",
     icon: "🍃",
-    welcome: "施主好！我是您的经穴流注助理。天人相应，经气顺时流转。请详陈您的胃病、头痛、双腿冰凉或亚健康疲乏，我将为您精准定位当下时辰当令的御邪经脉，教您点揉什么穴位、手法及揉穴口诀，恢复身心元本。",
-    welcomeAccessible: "施主好！按按穴位，气血就通了。您现在哪里不舒服，手脚容易怕冷发凉吗？大医来告诉您按揉哪个穴位管用。手法口诀仔细，听得懂也学得快！"
+    welcome: "您好！我是您的经穴养生顾问。顺应时辰调理，有助于改善身体状态。请告诉我您的不适，比如胃痛、头痛、手脚冰凉或容易疲劳，我会为您推荐当前时段适合按揉的穴位和手法，帮助恢复元气。",
+    welcomeAccessible: "您好！按按穴位，气血就通了。您现在哪里不舒服，手脚容易发凉吗？我来告诉您按揉哪个穴位管用，手法讲解详细，听得懂也学得快！",
+    placeholder: "说说您哪里不适，或想了解什么穴位…",
+    placeholderLarge: "写下您的不适症状或想了解的穴位…"
   },
   surprise: {
     label: "随缘彩蛋",
     icon: "🎁",
-    welcome: "施主好！我是您的东方彩蛋助理。阁主已备一签金光璀璨的「养生随缘吉祥签」，或者是古代名医日常生活小趣闻以贻施主。请问您想摇一签来了解今日颐养宜忌，还是想探听一二神医孙思邈的本草奇遇？",
-    welcomeAccessible: "施主好！今天阁主给您备了张好运气色签，还有李时珍种草药的逗趣故事。您说句话，咱们现在就摇一签看运势！"
+    welcome: "您好！我是您的健康彩蛋助理。这里准备了有趣的「养生随缘签」，还有古代名医的生活趣闻。您想了解今日养生宜忌，还是听听孙思邈、李时珍的有趣故事？",
+    welcomeAccessible: "您好！今天给您准备了养生趣味签，还有李时珍种草药的小故事。您说句话，咱们来看看今天的养生运势！",
+    placeholder: "",
+    placeholderLarge: ""
   }
 };
 
@@ -115,7 +126,7 @@ export default function VoiceConsultant({
       const welcomeText = isLargeFont ? moduleConf.welcomeAccessible : moduleConf.welcome;
       
       const isSwitch = prevModuleRef.current !== null && prevModuleRef.current !== activeModule;
-      const displayGreet = isSwitch ? `✨ 已进入【${moduleConf.label}智体】模式。${welcomeText}` : welcomeText;
+      const displayGreet = isSwitch ? `✨ 已切换至【${moduleConf.label}】模式。${welcomeText}` : welcomeText;
 
       const introMsg: Message = {
         id: "initial-" + activeModule + "-" + Date.now(),
@@ -192,7 +203,7 @@ export default function VoiceConsultant({
   const toggleTts = () => {
     setIsTtsEnabled(!isTtsEnabled);
     if (!isTtsEnabled) {
-      speakText("语音播报已开启，大医稍后将贴心诵答。");
+      speakText("语音播报已开启，稍后将为您朗读回复。");
     } else if (window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
@@ -289,7 +300,7 @@ export default function VoiceConsultant({
     const userMsg: Message = {
       id: "msg-" + Date.now(),
       role: "user",
-      text: trimmed || "施主上传了图片附件并请大医诊疗点评。",
+      text: trimmed || "用户上传了图片，请帮忙分析。",
       timestamp: new Date(),
       attachments: finalAttachments
     };
@@ -322,7 +333,7 @@ export default function VoiceConsultant({
       });
 
       const data = await response.json();
-      
+
       if (!response.ok) {
         throw new Error(data.error || "API request failed");
       }
@@ -343,7 +354,7 @@ export default function VoiceConsultant({
       const errorMsg: Message = {
         id: "msg-err-" + Date.now(),
         role: "assistant",
-        text: "大医方才在五觉御药炉配茶时，星气气流不慎有些阻滞。施主请稍后再试，或者更换一下对话内容哦。大医常随自然，祝您吉祥。",
+        text: "抱歉，处理您的请求时出现了网络波动。请稍后再试，或换个问题重新发送。感谢理解。",
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorMsg]);
@@ -452,7 +463,57 @@ export default function VoiceConsultant({
           {children}
         </code>
       );
-    }
+    },
+    table: ({ children }: any) => (
+      <div className={`overflow-x-auto my-3 rounded-lg border ${
+        activeDarkMode ? 'border-emerald-800/40' : 'border-stone-200'
+      }`}>
+        <table className={`w-full text-left border-collapse ${
+          activeLargeFont ? "text-sm" : "text-xs"
+        }`}>
+          {children}
+        </table>
+      </div>
+    ),
+    thead: ({ children }: any) => (
+      <thead className={`${
+        activeDarkMode ? "bg-emerald-950/60" : "bg-emerald-50/80"
+      }`}>
+        {children}
+      </thead>
+    ),
+    tbody: ({ children }: any) => (
+      <tbody className={`divide-y ${
+        activeDarkMode ? "divide-emerald-800/30" : "divide-stone-100"
+      }`}>
+        {children}
+      </tbody>
+    ),
+    tr: ({ children }: any) => (
+      <tr className={`transition-colors ${
+        activeDarkMode ? "hover:bg-emerald-950/30" : "hover:bg-emerald-50/50"
+      }`}>
+        {children}
+      </tr>
+    ),
+    th: ({ children }: any) => (
+      <th className={`px-3 py-2 font-black text-left whitespace-nowrap ${
+        activeLargeFont ? "text-sm" : "text-xs"
+      } ${
+        activeDarkMode ? "text-emerald-300" : "text-emerald-900"
+      }`}>
+        {children}
+      </th>
+    ),
+    td: ({ children }: any) => (
+      <td className={`px-3 py-2 ${
+        activeLargeFont ? "text-sm font-bold" : "text-xs"
+      } ${
+        activeDarkMode ? "text-stone-200" : "text-stone-700"
+      }`}>
+        {children}
+      </td>
+    ),
   });
 
   // Lexical Typewriter renderer to feed character intervals dynamically with full markdown support
@@ -487,7 +548,7 @@ export default function VoiceConsultant({
     
     return (
       <div className="markdown-body">
-        <Markdown components={getMarkdownComponents(activeDarkMode, isLargeFont)}>{visibleText}</Markdown>
+        <Markdown remarkPlugins={[remarkGfm]} components={getMarkdownComponents(activeDarkMode, isLargeFont)}>{visibleText}</Markdown>
       </div>
     );
   };
@@ -498,7 +559,7 @@ export default function VoiceConsultant({
         ? "bg-[#06140edd]/90 border-emerald-950 shadow-emerald-950/40 text-stone-100" 
         : "bg-white/95 border-2 border-emerald-100 shadow-md text-stone-800"
     } ${
-      isLargeFont ? "h-[640px] rounded-[40px] p-8" : "h-[550px] rounded-[32px] p-6"
+      isLargeFont ? "h-[740px] rounded-[40px] p-8" : "h-[660px] rounded-[32px] p-6"
     }`}>
       
       {/* Background elegant faint pattern representing traditional herbal diagram */}
@@ -533,22 +594,13 @@ export default function VoiceConsultant({
               } ${
                 isLargeFont ? "text-lg" : "text-base"
               }`}>
-                灵枢·{moduleNames[activeModule].label}大医
+                灵枢·{moduleNames[activeModule].label}顾问
               </h2>
-              <span className={`px-2.5 py-0.5 rounded-full font-black flex items-center gap-0.5 border ${
-                isDarkMode 
-                  ? "bg-emerald-900/30 text-emerald-300 border-emerald-800/40" 
-                  : "bg-emerald-100/50 text-emerald-800 border-emerald-200/50"
-              } ${
-                isLargeFont ? "text-xs" : "text-[10px]"
-              }`}>
-                {moduleNames[activeModule].icon} 主持调理
-              </span>
             </div>
             {!isLargeFont && (
               <p className={`text-[10px] font-semibold mt-0.5 ${
                 isDarkMode ? "text-stone-400" : "text-stone-400"
-              }`}>节气、子午流注顺流施治 • 大医贴身调养阁馆</p>
+              }`}>中医养生 · AI 健康顾问</p>
             )}
           </div>
         </div>
@@ -667,7 +719,7 @@ export default function VoiceConsultant({
                       />
                     ) : (
                       <div className="markdown-body">
-                        <Markdown components={getMarkdownComponents(isDarkMode || false, isLargeFont)}>{displayedText}</Markdown>
+                        <Markdown remarkPlugins={[remarkGfm]} components={getMarkdownComponents(isDarkMode || false, isLargeFont)}>{displayedText}</Markdown>
                       </div>
                     )
                   )}
@@ -705,7 +757,7 @@ export default function VoiceConsultant({
                 isLargeFont ? "text-sm" : "text-[11px]"
               } ${isDarkMode ? "text-emerald-300" : "text-emerald-850"}`}>
                 <Sparkles className="w-3.5 h-3.5 text-yellow-500 animate-bounce" />
-                大医阁主正在调息理诊中...
+                健康顾问正在分析中...
               </span>
               <div className="flex items-center gap-1 mt-1">
                 <span className="w-1.5 h-1.5 bg-emerald-600 rounded-full animate-bounce [animation-delay:-0.3s]" />
@@ -729,7 +781,7 @@ export default function VoiceConsultant({
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
             </span>
-            <span className={`text-xs font-black ${isDarkMode ? "text-red-300" : "text-red-800"}`}>大医正在倾听您述说身体状况...</span>
+            <span className={`text-xs font-black ${isDarkMode ? "text-red-300" : "text-red-800"}`}>正在聆听您的描述...</span>
           </div>
           <div className="flex items-end gap-0.5 h-4">
             <div className="w-0.5 bg-red-500 h-2 animate-[pulse_0.4s_infinite_alternate]" />
@@ -802,14 +854,17 @@ export default function VoiceConsultant({
         <button
           type="button"
           id="btn-upload-file"
-          onClick={() => fileInputRef.current?.click()}
-          title="上传文件/舌相/食材照片"
-          className={`transition-colors flex items-center justify-center shrink-0 cursor-pointer focus:outline-none focus:ring-0 border ${
+          onClick={() => activeModule === "surprise" && fileInputRef.current?.click()}
+          title={activeModule === "surprise" ? "上传文件/舌苔/食物照片" : "当前模块不支持上传文件"}
+          disabled={activeModule !== "surprise"}
+          className={`transition-colors flex items-center justify-center shrink-0 focus:outline-none focus:ring-0 border ${
             isLargeFont ? "p-4 rounded-[22px]" : "p-3 rounded-2xl"
           } ${
-            isDarkMode 
-              ? "bg-[#0c2217] border-emerald-900/45 text-stone-300 hover:text-emerald-400 hover:border-emerald-800" 
-              : "bg-stone-50 border-stone-200 text-stone-600 hover:text-emerald-700 hover:border-emerald-200"
+            activeModule !== "surprise"
+              ? "opacity-40 cursor-not-allowed bg-stone-100 border-stone-200 text-stone-400"
+              : isDarkMode
+                ? "bg-[#0c2217] border-emerald-900/45 text-stone-300 hover:text-emerald-400 hover:border-emerald-800 cursor-pointer"
+                : "bg-stone-50 border-stone-200 text-stone-600 hover:text-emerald-700 hover:border-emerald-200 cursor-pointer"
           }`}
         >
           <Paperclip className={isLargeFont ? "w-5.5 h-5.5" : "w-4.5 h-4.5"} />
@@ -818,17 +873,20 @@ export default function VoiceConsultant({
         {/* Voice recording activator button */}
         <button
           type="button"
-          id="btn-voice-record-阁主"
-          onClick={toggleRecording}
-          title={isRecording ? "点击结束录音" : "按语音输入"}
-          className={`transition-all flex items-center justify-center shrink-0 cursor-pointer focus:outline-none focus:ring-0 border ${
+          id="btn-voice-record"
+          onClick={() => activeModule === "surprise" && toggleRecording()}
+          title={activeModule === "surprise" ? (isRecording ? "点击结束录音" : "按语音输入") : "当前模块不支持语音输入"}
+          disabled={activeModule !== "surprise"}
+          className={`transition-all flex items-center justify-center shrink-0 focus:outline-none focus:ring-0 border ${
             isLargeFont ? "p-4 rounded-[22px]" : "p-3 rounded-2xl"
           } ${
-            isRecording 
-              ? "bg-red-500 text-white border-red-500 hover:bg-red-600 animate-pulse" 
-              : isDarkMode
-                ? "bg-[#0c2217] border-emerald-900/45 text-stone-300 hover:text-emerald-400 hover:border-emerald-800"
-                : "bg-stone-50 border-stone-200 text-stone-600 hover:text-emerald-700 hover:border-emerald-200"
+            activeModule !== "surprise"
+              ? "opacity-40 cursor-not-allowed bg-stone-100 border-stone-200 text-stone-400"
+              : isRecording
+                ? "bg-red-500 text-white border-red-500 hover:bg-red-600 animate-pulse cursor-pointer"
+                : isDarkMode
+                  ? "bg-[#0c2217] border-emerald-900/45 text-stone-300 hover:text-emerald-400 hover:border-emerald-800 cursor-pointer"
+                  : "bg-stone-50 border-stone-200 text-stone-600 hover:text-emerald-700 hover:border-emerald-200 cursor-pointer"
           }`}
         >
           {isRecording ? <MicOff className={isLargeFont ? "w-5.5 h-5.5" : "w-4.5 h-4.5"} /> : <Mic className={isLargeFont ? "w-5.5 h-5.5" : "w-4.5 h-4.5"} />}
@@ -840,7 +898,7 @@ export default function VoiceConsultant({
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onPaste={handlePaste}
-          placeholder={isRecording ? (isLargeFont ? "您说话，大医正在听..." : "施主请尽情述说身体所感...") : (isLargeFont ? "写下您不舒服的地方（字大，放心写）..." : "说出您气色不适或健康需求（支持拖入舌相图片）")}
+          placeholder={isRecording ? (isLargeFont ? "正在聆听，请说话..." : "正在聆听，请描述您的状况...") : (isLargeFont ? moduleNames[activeModule].placeholderLarge : moduleNames[activeModule].placeholder)}
           disabled={loading}
           className={`flex-1 focus:ring-2 focus:outline-none font-black transition-all border-2 ${
             isDarkMode
@@ -854,7 +912,7 @@ export default function VoiceConsultant({
         {/* Submit */}
         <button
           type="submit"
-          id="btn-send-message-阁主"
+          id="btn-send-message"
           disabled={loading || (!input.trim() && attachments.length === 0)}
           className={`bg-emerald-750 hover:bg-emerald-850 text-white font-extrabold transition-all disabled:opacity-45 flex items-center justify-center shrink-0 cursor-pointer focus:outline-none focus:ring-0 shadow-xs ${
             isLargeFont ? "p-4.5 rounded-[22px]" : "p-3 rounded-2xl"

@@ -65,7 +65,7 @@ export default function App() {
       </AnimatePresence>
 
       <div 
-        className={`min-h-screen transition-all duration-350 relative overflow-x-hidden ${
+        className={`min-h-screen flex flex-col transition-all duration-350 relative overflow-x-hidden ${
           isDarkMode ? "dark text-stone-100" : "text-stone-800"
         } ${
           isLargeFont ? "font-sans text-base leading-relaxed" : "font-sans text-xs leading-normal"
@@ -94,7 +94,7 @@ export default function App() {
         {hasLoadedFortune && (
           <>
             {/* Main Top Header Navigation */}
-            <header className={`sticky top-0 z-30 transition-all border-b duration-300 backdrop-blur-xl ${
+            <header className={`sticky top-0 z-30 transition-all border-b duration-300 backdrop-blur-xl max-w-7xl mx-auto w-full rounded-b-2xl ${
           isDarkMode 
             ? "bg-[#04120ca2]/65 border-white/5 text-stone-100 shadow-sm" 
             : "bg-white/45 border-white/20 text-stone-900 shadow-sm"
@@ -180,7 +180,7 @@ export default function App() {
         </header>
 
         {/* Main Application Content Container */}
-        <main className={`max-w-7xl mx-auto px-4 relative z-10 flex flex-col transition-all duration-300 ${
+        <main className={`max-w-7xl mx-auto px-4 relative z-10 flex-1 w-full flex flex-col transition-all duration-300 ${
           isLargeFont ? "py-8 md:py-10 gap-10" : "py-6 md:py-8 gap-6"
         }`}>
           
@@ -222,10 +222,10 @@ export default function App() {
                     } ${
                       isLargeFont ? "text-lg" : "text-sm"
                     }`}>
-                      🍂 经气调息，天人相应。
+                      🍂 顺时养生，调和身心。
                     </p>
                     <p 
-                      className={`font-extrabold tracking-wide leading-relaxed rounded-[24px] border transition-all duration-300 text-center max-w-lg mx-auto shadow-sm ${
+                      className={`font-extrabold tracking-wide leading-relaxed rounded-[24px] border transition-all duration-300 text-left max-w-lg mx-auto shadow-sm ${
                         isDarkMode 
                           ? "bg-stone-950/45 backdrop-blur-md border-white/[0.05] text-stone-200" 
                           : "bg-white/45 backdrop-blur-md border-white/40 text-stone-800"
@@ -233,13 +233,17 @@ export default function App() {
                         isLargeFont ? "text-sm p-6.5 mt-5 leading-loose" : "text-xs p-5 mt-3.5"
                       }`}
                     >
-                      大医已为您准备了五大分野的中医智愈助理。请在下方点击选择一个
-                      <span className={isDarkMode ? "text-amber-300 font-black" : "text-emerald-800 font-black"}> 专属健康智能体 </span>
-                      ，开启针对
-                      <span className={isDarkMode ? "text-emerald-300 font-black" : "text-emerald-700 font-black"}> 脾胃、经络、运动 </span>
-                      、甚至
-                      <span className={isDarkMode ? "text-pink-300 font-black" : "text-pink-700 font-black"}> 情志心理 </span>
-                      的定制辩证调摄。
+                      <blockquote className={`border-l-4 pl-4 italic ${
+                        isDarkMode ? "border-emerald-500 text-stone-200" : "border-emerald-600 text-stone-700"
+                      } ${isLargeFont ? "text-base leading-relaxed" : "text-sm leading-relaxed"}`}>
+                        这里为您准备了五大方向的中医健康助手。请在下方点击选择一个
+                        <span className={isDarkMode ? "text-amber-300 font-black not-italic" : "text-emerald-800 font-black not-italic"}> 专属健康顾问 </span>
+                        ，开启针对
+                        <span className={isDarkMode ? "text-emerald-300 font-black not-italic" : "text-emerald-700 font-black not-italic"}> 脾胃、经络、运动 </span>
+                        、以及
+                        <span className={isDarkMode ? "text-pink-300 font-black not-italic" : "text-pink-700 font-black not-italic"}> 情志心理 </span>
+                        的个性化调理方案。
+                      </blockquote>
                     </p>
                   </div>
                 </div>
@@ -263,7 +267,7 @@ export default function App() {
                 {/* Ambient Decorative Signpost */}
                 <div className="mt-14 flex items-center gap-2 text-[10px] tracking-widest font-extrabold uppercase pointer-events-none text-stone-500/50">
                   <Landmark className="w-4 h-4" />
-                  <span>五藏元气，皆在其中 • 迎客静立</span>
+                  <span>五脏调和，元气充盈 • 静候启程</span>
                 </div>
               </motion.div>
             ) : (
@@ -279,7 +283,7 @@ export default function App() {
               >
                 
                 {/* Active Sub-Bar containing Back to gate and active title, styled as glassmorphic with ultra-soft borders */}
-                <div className="flex justify-between items-center bg-white/20 dark:bg-stone-900/15 border border-white/20 dark:border-white/5 backdrop-blur-xl p-3.5 rounded-[24px] max-w-4xl mx-auto w-full transition-all duration-300">
+                <div className="flex justify-between items-center bg-white/20 dark:bg-stone-900/15 border border-white/20 dark:border-white/5 backdrop-blur-xl p-3.5 rounded-[24px] max-w-5xl mx-auto w-full transition-all duration-300">
                   
                   {/* Gate Return Button */}
                   <button 
@@ -296,7 +300,7 @@ export default function App() {
                     }`}
                   >
                     <ArrowLeft className={`transition-transform group-hover:-translate-x-0.5 ${isLargeFont ? "w-5 h-5" : "w-4 h-4"}`} />
-                    <span>退出返回山门</span>
+                    <span>返回首页</span>
                   </button>
 
                   <span className={`font-black tracking-wider ${
@@ -304,12 +308,12 @@ export default function App() {
                   } ${
                     isLargeFont ? "text-sm pr-2" : "text-xs pr-1"
                   }`}>
-                    🍂 灵枢诊疗阁 • {activeModule === "diet" ? "应季饮食" : activeModule === "exercise" ? "导引运动" : activeModule === "mental" ? "宁神心理" : activeModule === "wellness" ? "时穴养生" : "随缘彩蛋"}
+                    🍂 灵枢·五觉养生 • {activeModule === "diet" ? "应季饮食" : activeModule === "exercise" ? "导引运动" : activeModule === "mental" ? "宁神心理" : activeModule === "wellness" ? "时穴养生" : "随缘彩蛋"}
                   </span>
                 </div>
 
                 {/* Suggestion list sits gracefully at top (BEFORE CHATBOX), loading dynamically only AFTER stream completes */}
-                <div className="max-w-4xl mx-auto w-full">
+                <div className="max-w-5xl mx-auto w-full">
                   <AnimatePresence mode="wait">
                     {!isChatStreaming ? (
                       <motion.div
@@ -336,14 +340,14 @@ export default function App() {
                           isLargeFont ? "text-xs pt-1.5" : "text-[9.5px]"
                         }`}
                       >
-                        ☕ 大医正在贴心吐纳开释，其理诊毕即送上更多养生探讨灵感
+                        ☕ 顾问正在整理思路，回复完成后将为您推荐更多养生话题
                       </motion.p>
                     )}
                   </AnimatePresence>
                 </div>
 
                 {/* Central Focus Active Chat Workspace */}
-                <div className="max-w-4xl mx-auto w-full relative z-10" id="smart-chat-window">
+                <div className="max-w-5xl mx-auto w-full relative z-10" id="smart-chat-window">
                   <VoiceConsultant
                     activeModule={activeModule}
                     externalPrompt={externalPrompt}
@@ -362,34 +366,34 @@ export default function App() {
         </main>
 
         {/* Global Footer and disclosures */}
-        <footer className={`border-t relative z-10 text-center transition-all duration-300 mt-16 ${
-          isDarkMode 
-            ? "bg-stone-950/70 border-emerald-950 text-emerald-100/40" 
-            : "bg-[#edf5f095] border-emerald-100/50 text-emerald-800/80"
+        <footer className={`border-t relative z-10 text-center transition-all duration-300 backdrop-blur-xl max-w-7xl mx-auto w-full rounded-t-2xl mt-16 ${
+          isDarkMode
+            ? "bg-stone-950/50 border-emerald-950 text-emerald-100/40"
+            : "bg-[#edf5f0]/60 border-emerald-100/50 text-emerald-800/80"
         } ${
           isLargeFont ? "py-10" : "py-6 mt-12"
         }`}>
           <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-6 text-center md:text-left">
             <div className="max-w-xl">
               <div className="flex items-center gap-2 justify-center md:justify-start">
-                <span className={`text-sm font-black ${isDarkMode ? "text-emerald-100" : "text-emerald-950"}`}>☯️ 灵枢·五觉养生阁</span>
-                <span className={`text-[9px] px-2 py-0.5 rounded font-bold ${
+                <span className={`font-black ${isDarkMode ? "text-emerald-100" : "text-emerald-950"} ${isLargeFont ? "text-lg" : "text-sm"}`}>☯️ 灵枢·五觉养生阁</span>
+                <span className={`px-2 py-0.5 rounded font-bold ${
                   isDarkMode ? "bg-emerald-950/80 text-emerald-300" : "bg-emerald-100 text-emerald-800"
-                }`}>
-                  天人相应，顺时静养
+                } ${isLargeFont ? "text-xs" : "text-[9px]"}`}>
+                  顺应时节，科学养生
                 </span>
               </div>
-              <p className="text-[10px] leading-relaxed mt-2.5 font-bold">
-                温顺静言：本殿所荐之穴位、运动舒展建议、养生膳饮食材鉴评均归纳自传世中医学典籍之论述。
-                智愈对话不代表专业实体医院执照及诊断配方。若有切实身体器质病变与不适，请施主即刻移步正规中西医馆就诊就医。大医心系施主泰然健康。
+              <p className={`leading-relaxed mt-2.5 font-bold ${isLargeFont ? "text-sm leading-loose" : "text-[10px]"}`}>
+                温馨提示：本平台推荐的穴位、运动建议、饮食方案均参考自中医典籍与养生理论。
+                AI 健康对话不构成专业医疗诊断或处方。若有身体不适，请及时前往正规医疗机构就诊。祝您健康！
               </p>
             </div>
             <div className="text-center md:text-right shrink-0">
-              <span className={`text-[10px] font-black px-4 py-2 rounded-full border border-dashed ${
-                isDarkMode 
-                  ? "bg-[#11231a] text-emerald-200 border-emerald-800/40" 
+              <span className={`font-black px-4 py-2 rounded-full border border-dashed ${
+                isDarkMode
+                  ? "bg-[#11231a] text-emerald-200 border-emerald-800/40"
                   : "bg-white text-emerald-800 border-emerald-200/80"
-              }`}>
+              } ${isLargeFont ? "text-sm" : "text-[10px]"}`}>
                 颐养阁 © 2026 • 调顺经络，百骸和畅
               </span>
             </div>

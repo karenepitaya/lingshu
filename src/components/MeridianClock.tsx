@@ -25,7 +25,7 @@ export default function MeridianClock({ onAskGemini }: MeridianClockProps) {
 
   // Quick prompt generator for the AI Assistant based on the hour
   const handleAskAboutShichen = (shichen: ShichenInfo) => {
-    const prompt = `我想咨询关于中医时辰养生的问题。现在是【${shichen.name}】，对应【${shichen.organ}】。\n时辰状态：${shichen.status}\n养生建议：${shichen.advice}\n时辰推荐药茶是“${shichen.herbalTea.name}”，推荐养生穴位是“${shichen.acupoint.name}”。\n请大医颐养详细解答一下在这个时辰，像我这样的久坐职场人士/中老年群体应当如何科学调理？有什么需要注意的饮食禁忌和保健操指引吗？`;
+    const prompt = `我想咨询关于中医时辰养生的问题。现在是【${shichen.name}】，对应【${shichen.organ}】。\n时辰状态：${shichen.status}\n养生建议：${shichen.advice}\n时辰推荐药茶是”${shichen.herbalTea.name}”，推荐养生穴位是”${shichen.acupoint.name}”。\n请详细解答一下在这个时辰，像我这样的久坐职场人士/中老年群体应当如何科学调理？有什么需要注意的饮食禁忌和保健操指引吗？`;
     onAskGemini(prompt);
   };
 
@@ -148,7 +148,7 @@ export default function MeridianClock({ onAskGemini }: MeridianClockProps) {
             className="mt-6 w-full bg-[#6B8E23] hover:bg-[#5b7a1d] text-white text-xs font-bold py-3 px-4 rounded-xl shadow-xs hover:shadow-md transition-all flex items-center justify-center gap-2"
           >
             <Send className="w-3.5 h-3.5" />
-            咨询大医颐养此特定调理
+            咨询顾问了解此时辰调理
           </button>
         </div>
 
